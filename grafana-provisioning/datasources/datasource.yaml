@@ -1,0 +1,14 @@
+apiVersion: 1
+
+datasources:
+  - name: PRISMS Database
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    database: prisms
+    isDefault: true
+    user: reader
+    password: password
+    version: 1
+    editable: true
+
