@@ -55,7 +55,7 @@ services:
       - influxdb
 
   sensor_status:
-    image: prisms/sensor-status:latest
+    image: prisms/sensor-status:dev
     container_name: sensor_status
     environment:
       DASH_INFLUX_HOST: ${INFLUX_HOST}
@@ -75,7 +75,7 @@ services:
       - mongodb
 
   export_tool:
-    image: prisms/export-tool:latest
+    image: prisms/export-tool:dev
     container_name: export_tool
     environment:
       ET_BASIC_AUTH_USERNAME: phil
@@ -152,7 +152,7 @@ services:
       - ./mosquitto-storage:/mosquitto/data
 
   ha_subscriber:
-    image: prisms/ha_mqtt_subscriber
+    image: prisms/ha_mqtt_subscriber:dev
     container_name: ha_subscriber
     volumes:
       - ./ha_subscriber-storage/:/app/data
@@ -170,7 +170,7 @@ services:
       - mosquitto
 
   prisms_subscriber:
-    image: prisms/prisms_mqtt_subscriber
+    image: prisms/prisms_mqtt_subscriber:dev
     container_name: prisms_subscriber
     volumes:
       - ./prisms_subscriber-storage/:/app/data
