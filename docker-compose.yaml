@@ -76,7 +76,7 @@ services:
       - mongodb
 
   export_tool:
-    image: prisms/export-tool:dev
+    image: prisms/export_tool:dev
     container_name: export_tool
     environment:
       ET_BASIC_AUTH_USERNAME: ${ET_BASIC_AUTH_USERNAME}
