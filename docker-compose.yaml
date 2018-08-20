@@ -26,17 +26,17 @@ services:
     entrypoint: /usr/local/bin/docker-gen -notify-sighup nginx -watch -wait 5s:30s /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
 
   # Generate certificates
-  # letsencrypt-nginx-proxy-companion:
-  #   restart: always
-  #   image: jrcs/letsencrypt-nginx-proxy-companion
-  #   container_name: letsencrypt-nginx-proxy-companion
-  #   volumes_from:
-  #     - nginx
-  #   volumes:
-  #     - "/var/run/docker.sock:/var/run/docker.sock:ro"
-  #     - "./certs:/etc/nginx/certs:rw"
-  #   environment:
-  #     - NGINX_DOCKER_GEN_CONTAINER=nginx-gen
+  letsencrypt-nginx-proxy-companion:
+    restart: always
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt-nginx-proxy-companion
+    volumes_from:
+      - nginx
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/etc/nginx/certs:rw"
+    environment:
+      - NGINX_DOCKER_GEN_CONTAINER=nginx-gen
 
   # Applications
   grafana:
@@ -51,6 +51,8 @@ services:
       VIRTUAL_HOST: ${GF_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${GF_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     depends_on:
       - influxdb
 
