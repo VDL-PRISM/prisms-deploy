@@ -73,6 +73,8 @@ services:
       VIRTUAL_HOST: ${DASH_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8000
+      LETSENCRYPT_HOST: ${DASH_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     depends_on:
       - influxdb
       - mongodb
@@ -92,6 +94,8 @@ services:
       VIRTUAL_HOST: ${ET_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8000
+      LETSENCRYPT_HOST: ${ET_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     depends_on:
       - influxdb
 
@@ -129,6 +133,8 @@ services:
       VIRTUAL_HOST: ${INFLUXDB_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8086
+      LETSENCRYPT_HOST: ${INFLUXDB_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
 
   mongodb:
     image: mongo:4.0
@@ -154,6 +160,13 @@ services:
     volumes:
       - ./mosquitto-config:/mosquitto/config
       - ./mosquitto-storage:/mosquitto/data
+      - ./certs/${MQTT_VIRTUAL_HOST}:/mosquitto/certs:ro
+    environment:
+      VIRTUAL_HOST: ${MQTT_VIRTUAL_HOST}
+      VIRTUAL_NETWORK: nginx-proxy
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${MQTT_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
 
   ha_subscriber:
     image: prisms/ha_mqtt_subscriber:dev
