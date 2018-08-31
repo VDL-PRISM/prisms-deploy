@@ -154,7 +154,7 @@ services:
     environment:
       VIRTUAL_HOST: ${MQTT_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
-      VIRTUAL_PORT: 3000
+      VIRTUAL_PORT: 3000  # Fake port -- not really used
       LETSENCRYPT_HOST: ${MQTT_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
 
