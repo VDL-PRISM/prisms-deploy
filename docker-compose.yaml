@@ -132,13 +132,20 @@ services:
     volumes:
       - ./mongodb-storage:/data/db
       - ./mongodb-provisioning:/docker-entrypoint-initdb.d
+      - ./mongodb-config/certs/ca.pem:/etc/ssl/certs/ca.pem
+      - ./certs/${MONGO_VIRTUAL_HOST}:/etc/ssl/${MONGO_VIRTUAL_HOST}
     environment:
       MONGO_DATA_DIR: /data/db
       # MONGO_LOG_DIR: /dev/null
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
-    command: --smallfiles # --logpath=/dev/null # --quiet
+      VIRTUAL_HOST: ${MONGO_VIRTUAL_HOST}
+      VIRTUAL_NETWORK: nginx-proxy
+      VIRTUAL_PORT: 3000  # Fake port -- not really used
+      LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    command: sh -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && mongod --sslMode requireSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --sslCAFile /etc/ssl/certs/ca-certificates.crt --smallfiles' # --logpath=/dev/null # --quiet
 
   # Data aggregation
   mosquitto:
