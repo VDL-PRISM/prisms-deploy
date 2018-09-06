@@ -142,7 +142,7 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
       VIRTUAL_HOST: ${MONGO_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
-      VIRTUAL_PORT: 3000  # Fake port -- not really used
+      VIRTUAL_PORT: 3001  # Fake port -- not really used
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     command: sh -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && mongod --sslMode requireSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --sslCAFile /etc/ssl/certs/ca-certificates.crt --smallfiles' # --logpath=/dev/null # --quiet
@@ -161,7 +161,7 @@ services:
     environment:
       VIRTUAL_HOST: ${MQTT_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
-      VIRTUAL_PORT: 3000  # Fake port -- not really used
+      VIRTUAL_PORT: 3002  # Fake port -- not really used
       LETSENCRYPT_HOST: ${MQTT_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
 
