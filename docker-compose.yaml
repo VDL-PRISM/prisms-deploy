@@ -145,7 +145,7 @@ services:
       VIRTUAL_PORT: 3001  # Fake port -- not really used
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
-    command: sh -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && mongod --sslMode requireSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --sslCAFile /etc/ssl/certs/ca-certificates.crt --smallfiles' # --logpath=/dev/null # --quiet
+    entrypoint: bash -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem <(echo) /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && docker-entrypoint.sh mongod --sslMode allowSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --bind_ip_all --smallfiles' # --logpath=/dev/null # --quiet
 
   # Data aggregation
   mosquitto:
