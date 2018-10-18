@@ -105,7 +105,7 @@ def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
 
     # Copy over config file
     shutil.copy('templates/mosquitto.conf', config_path)
-    shutil.copy('certs/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
+    shutil.copy('templates/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
 
 
     # Create acl_file
