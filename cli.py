@@ -13,15 +13,15 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 
 
-MONGODB_CONTAINER_NAME = 'prisms-mongodb'
-INFLUX_CONTAINER_NAME = 'prisms-influxdb'
-GRAFANA_CONTAINER_NAME = 'prisms-grafana'
-MOSQUITTO_CONTAINER_NAME = 'prisms-mosquitto'
+MONGODB_CONTAINER_NAME = 'epifi-mongodb'
+INFLUX_CONTAINER_NAME = 'epifi-influxdb'
+GRAFANA_CONTAINER_NAME = 'epifi-grafana'
+MOSQUITTO_CONTAINER_NAME = 'epifi-mosquitto'
 
 
 def main():
     config = {}
-    print("Welcome to the PRISMS architecture setup.")
+    print("Welcome to the EpiFi architecture setup.")
 
     print("Let's start with a couple of questions.")
     config['use_lets_encrypt'] = click.confirm("Would you like to use Let's Encrypt to generate certificates?",
@@ -71,10 +71,10 @@ def main():
 
     mqtt_users = [{'name': 'prisms_subscriber',
                    'password': generate_password(),
-                   'topic': 'prisms/v1/#'},
+                   'topic': 'epifi/v1/#'},
                   {'name': 'prisms_ha_subscriber',
                    'password': generate_password(),
-                   'topic': 'prisms/ha/v1/#'}]
+                   'topic': 'epifi/ha/v1/#'}]
 
 
     mosquitto_setup(client, mqtt_users)
@@ -92,7 +92,7 @@ def main():
     print(template.render(**config))
 def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
                     image='eclipse-mosquitto:latest',
-                    root_topic='prisms'):
+                    root_topic='epifi'):
     print("Setting up Mosquitto")
     persistent_storage = os.path.abspath(persistent_storage)
 
@@ -149,7 +149,7 @@ def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
 
 def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointainer_name,
                   persistent_storage='./grafana-storage',
-                  database_name='prisms', image='grafana/grafana:latest'):
+                  database_name='epifi', image='grafana/grafana:latest'):
     print("Setting up Grafana")
     persistent_storage = os.path.abspath(persistent_storage)
 
@@ -162,7 +162,7 @@ def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointai
     with tempfile.NamedTemporaryFile(dir='.') as f:
         # Set up configuration file
         datasources = {'apiVersion': 1,
-                       'datasources': [{'name': 'PRISMS',
+                       'datasources': [{'name': 'epifi',
                                         'type': 'influxdb',
                                         'access': 'proxy',
                                         'url': f'http://{influxdb_cointainer_name}:8086',
@@ -195,7 +195,7 @@ def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointai
 
 
 def influxdb_setup(client, users, persistent_storage='./influxdb-storage',
-                   database_name='prisms', image='influxdb:1.6'):
+                   database_name='epifi', image='influxdb:1.6'):
     print("Setting up InfluxDB")
     persistent_storage = os.path.abspath(persistent_storage)
 
@@ -232,7 +232,7 @@ def influxdb_setup(client, users, persistent_storage='./influxdb-storage',
 
 
 def mongodb_setup(client, users, persistent_storage='./mongodb-storage',
-                  database_name='prisms', collection_name='deployments',
+                  database_name='epifi', collection_name='deployments',
                   image='mongo:4.0'):
     print("Setting up MongoDB")
     persistent_storage = os.path.abspath(persistent_storage)
