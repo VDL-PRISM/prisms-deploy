@@ -155,8 +155,8 @@ services:
       - "1883:1883"
       - "8883:8883"
     volumes:
-      - ./mosquitto-config:/mosquitto/config
-      - ./mosquitto-storage:/mosquitto/data
+      - ./mosquitto-storage/config:/mosquitto/config
+      - ./mosquitto-storage/data:/mosquitto/data
       - ./certs/${MQTT_VIRTUAL_HOST}:/mosquitto/certs:ro
     environment:
       VIRTUAL_HOST: ${MQTT_VIRTUAL_HOST}

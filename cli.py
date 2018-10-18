@@ -16,6 +16,7 @@ import yaml
 MONGODB_CONTAINER_NAME = 'prisms-mongodb'
 INFLUX_CONTAINER_NAME = 'prisms-influxdb'
 GRAFANA_CONTAINER_NAME = 'prisms-grafana'
+MOSQUITTO_CONTAINER_NAME = 'prisms-mosquitto'
 
 
 def main():
@@ -67,6 +68,17 @@ def main():
     #                 'password': generate_password()}
     # grafana_setup(client, grafana_user['password'], influxdb_users[3], INFLUX_CONTAINER_NAME)
 
+
+    mqtt_users = [{'name': 'prisms_subscriber',
+                   'password': generate_password(),
+                   'topic': 'prisms/v1/#'},
+                  {'name': 'prisms_ha_subscriber',
+                   'password': generate_password(),
+                   'topic': 'prisms/ha/v1/#'}]
+
+
+    mosquitto_setup(client, mqtt_users)
+
     # print(mongodb_users)
     # print(influxdb_users)
     # print(grafana_user)
@@ -78,10 +90,61 @@ def main():
     template = env.get_template('env.template')
 
     print(template.render(**config))
+def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
+                    image='eclipse-mosquitto:latest',
+                    root_topic='prisms'):
+    print("Setting up Mosquitto")
+    persistent_storage = os.path.abspath(persistent_storage)
+
+    if not handle_existing_container(client, MOSQUITTO_CONTAINER_NAME, persistent_storage):
+        return
+
+    config_path = os.path.join(persistent_storage, 'config')
+    # Make config directory in storage folder
+    os.makedirs(os.path.join(config_path, 'certs'))
+
+    # Copy over config file
+    shutil.copy('templates/mosquitto.conf', config_path)
+    shutil.copy('certs/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
 
 
-def mosquitto_setup():
-    pass
+    # Create acl_file
+    with open(os.path.join(config_path, 'acl'), 'w') as f:
+        lines = [f"pattern write {root_topic}/v1/%u/#",
+                 f"pattern write {root_topic}/ha_v1/%u/#",
+                 ""]
+
+        for user in users:
+            lines.extend([f"user {user['name']}",
+                          f"topic read {user['topic']}",
+                          ""])
+
+        f.write('\n'.join(lines))
+
+
+    # Create password file
+    password_file = 'passwords'
+    mkpassword_command = [f"mosquitto_passwd -b {password_file} {user['name']} {user['password']}"
+                          for user in users]
+    mkpassword_command = ' && '.join(mkpassword_command)
+
+    container = client.containers.run(
+            image,
+            name=MOSQUITTO_CONTAINER_NAME,
+            detach=True,
+            volumes={persistent_storage: {'bind': '/mosquitto', 'mode': 'rw'}},
+            command=f'/bin/ash -c "cd /mosquitto/config && touch {password_file} && {mkpassword_command}"')
+
+    print(f"Waiting for {MOSQUITTO_CONTAINER_NAME} to initialize...")
+    wait_for_done(container)
+
+    print(f"Stopping {MOSQUITTO_CONTAINER_NAME}...")
+    container.stop()
+    print(f"Removing {MOSQUITTO_CONTAINER_NAME}...")
+    container.remove()
+
+
+
 
 
 def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointainer_name,
