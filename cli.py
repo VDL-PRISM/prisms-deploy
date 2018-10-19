@@ -10,6 +10,7 @@ import time
 
 import click
 import docker
+import enlighten
 import influxdb
 from jinja2 import Environment, FileSystemLoader
 import yaml
@@ -128,9 +129,7 @@ def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
 
     print(f"Pulling {image} (could take awhile)...")
     output = docker.APIClient().pull(image, stream=True, decode=True)
-    for o in output:
-        print(o['status'])
-    print('')
+    print_status(output)
 
     # Create password file
     password_file = 'passwords'
@@ -174,9 +173,7 @@ def grafana_setup(client, config, influxdb_cointainer_name,
 
     print(f"Pulling {image} (could take awhile)...")
     output = docker.APIClient().pull(image, stream=True, decode=True)
-    for o in output:
-        print(o['status'])
-    print('')
+    print_status(output)
 
     with tempfile.NamedTemporaryFile(dir='.') as f:
         # Set up configuration file
@@ -220,7 +217,6 @@ def influxdb_setup(client, config, persistent_storage='./influxdb-storage',
     if not handle_existing_container(client, INFLUX_CONTAINER_NAME, persistent_storage):
         return
 
-    print(config)
     config['influxdb_admin'] = create_user('admin', role='admin')
     config['influxdb_status'] = create_user('status', role='read')
     config['influxdb_export'] = create_user('export', role='read')
@@ -236,9 +232,7 @@ def influxdb_setup(client, config, persistent_storage='./influxdb-storage',
 
     print(f"Pulling {image} (could take awhile)...")
     output = docker.APIClient().pull(image, stream=True, decode=True)
-    for o in output:
-        print(o['status'])
-    print('')
+    print_status(output)
 
     container = client.containers.run(
         image,
@@ -282,9 +276,7 @@ def mongodb_setup(client, config, persistent_storage='./mongodb-storage',
 
     print(f"Pulling {image} (could take awhile)...")
     output = docker.APIClient().pull(image, stream=True, decode=True)
-    for o in output:
-        print(o['status'])
-    print('')
+    print_status(output)
 
     # Set up configuration files
     with tempfile.NamedTemporaryFile(dir='.') as f:
@@ -322,6 +314,50 @@ def create_user(name, **kwargs):
     return {'name': name,
             'password': generate_password(),
             **kwargs}
+
+
+def print_status(logs):
+    manager = enlighten.get_manager()
+
+    pbars = {}
+    for line in logs:
+        if line['status'] == 'Pulling fs layer' and line['id'] not in pbars:
+            pbar = manager.counter(
+                                   desc=f"Waiting {line['id']}",
+                                   unit='B')
+            pbars[line['id']] = pbar
+
+        elif line['status'] == 'Downloading' and line['id'] in pbars:
+            progress = line['progressDetail']
+            pbar = pbars[line['id']]
+
+            pbar.total = progress['total']
+            pbar.desc = f"Downloading {line['id']}"
+            pbar.update(progress['current'] - pbar.count)
+
+        elif line['status'] == 'Download complete' and line['id'] in pbars:
+            pbar = pbars[line['id']]
+
+            pbar.desc = f"Downloaded {line['id']}"
+            pbar.update(pbar.total - pbar.count)
+
+        elif line['status'] == 'Extracting' and line['id'] in pbars:
+            progress = line['progressDetail']
+            pbar = pbars[line['id']]
+
+            if pbar.total == pbar.count:
+                pbar.count = 0
+
+            pbar.update(progress['current'] - pbar.count)
+            pbar.desc = f"Extracting {line['id']}"
+
+        elif line['status'] == 'Pull complete' and line['id'] in pbars:
+            pbar = pbars[line['id']]
+            pbar.desc = f"Pull complete {line['id']}"
+            pbar.update(pbar.total - pbar.count)
+
+    manager.stop()
+    print()
 
 
 def wait_for_done(container, wait_time=5, print_logs=False):
