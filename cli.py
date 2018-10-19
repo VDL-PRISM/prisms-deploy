@@ -1,7 +1,9 @@
+import json
 import os
 import secrets
 import shutil
 import string
+import sys
 import tempfile
 import threading
 import time
@@ -17,87 +19,91 @@ MONGODB_CONTAINER_NAME = 'epifi-mongodb'
 INFLUX_CONTAINER_NAME = 'epifi-influxdb'
 GRAFANA_CONTAINER_NAME = 'epifi-grafana'
 MOSQUITTO_CONTAINER_NAME = 'epifi-mosquitto'
-
+CONFIG_FILE_NAME = 'epifi.yaml'
 
 def main():
-    config = {}
-    print("Welcome to the EpiFi architecture setup.")
 
-    print("Let's start with a couple of questions.")
-    config['use_lets_encrypt'] = click.confirm("Would you like to use Let's Encrypt to generate certificates?",
-                                               default=False)
+    config = {}
+    if os.path.isfile(CONFIG_FILE_NAME):
+        # Load configuration file
+        with open(CONFIG_FILE_NAME) as f:
+            config = yaml.load(f) or {}
+
+    click.echo("Welcome to the EpiFi architecture setup!\n")
+    if not config.get('subdomains'):
+        click.echo("This setup script assumes that you own a domain name and that"
+                    " each service will run as a subdomain. If this is not the"
+                    " case, then you should stop.")
+        if not click.confirm("Would you like to continue?", default=True):
+            click.echo("Bye!")
+            return
+
+    click.echo("\n\nGreat! Let's start with a couple of questions.")
+    if config.get('use_lets_encrypt', True):
+        config['use_lets_encrypt'] = click.confirm(
+            "Would you like to use Let's Encrypt to generate certificates?",
+            default=False)
 
     if config['use_lets_encrypt']:
-        config['lets_encrypt_email'] = click.prompt("What email address do you want to use?")
-        config['base_host_name'] = click.prompt("What is the hostname?")
+        config['lets_encrypt_email'] = config.get('lets_encrypt_email') or click.prompt("What email address do you want to use?")
+    else:
+        click.echo("\n\nThat's fine. You will have to get your own SSL "
+                    "certificates. Once you have done that, put the keys in "
+                    "the 'certs' folder.")
 
-    # client = docker.from_env()
+    config['hostname'] = config.get('hostname') or click.prompt("What is the base hostname?")
+    click.echo("\n\n")
+    config['influxdb_hostname'] = config.get('influxdb_hostname') or get_hostname('the database', 'db', config['hostname'])
+    config['mqtt_hostname'] = config.get('mqtt_hostname') or get_hostname('the MQTT broker', 'mqtt', config['hostname'])
+    config['grafana_hostname'] = config.get('grafana_hostname') or get_hostname('Grafana', 'grafana', config['hostname'])
+    config['mongodb_hostname'] = config.get('mongodb_hostname') or get_hostname('the metadata store', 'meta', config['hostname'])
+    config['export_hostname'] = config.get('export_hostname') or get_hostname('the export tool', 'export', config['hostname'])
+    config['status_hostname'] = config.get('status_hostname') or get_hostname('the status dashboard', 'status', config['hostname'])
 
-    # mongodb_users = [{'name': 'root',
-    #                   'password': generate_password(),
-    #                   'role': 'admin'},
-    #                  {'name': 'status_reader',
-    #                   'password': generate_password(),
-    #                   'role': 'read'},
-    #                  {'name': 'mqtt_reader',
-    #                   'password': generate_password(),
-    #                   'role': 'read'}]
-    # mongodb_setup(client, mongodb_users)
+    config['export_user'] = create_user('epifi')
 
-    # influxdb_users = [{'name': 'admin',
-    #                    'password': generate_password(),
-    #                    'role': 'admin'},
-    #                   {'name': 'status',
-    #                    'password': generate_password(),
-    #                    'role': 'read'},
-    #                   {'name': 'export',
-    #                    'password': generate_password(),
-    #                    'role': 'read'},
-    #                   {'name': 'grafana',
-    #                    'password': generate_password(),
-    #                    'role': 'read'},
-    #                   {'name': 'prisms_subscriber',
-    #                    'password': generate_password(),
-    #                    'role': 'write'},
-    #                   {'name': 'ha_subscriber',
-    #                    'password': generate_password(),
-    #                    'role': 'write'}]
-    # influxdb_setup(client, influxdb_users)
+    client = docker.from_env()
 
-    # grafana_user = {'name': 'admin',
-    #                 'password': generate_password()}
-    # grafana_setup(client, grafana_user['password'], influxdb_users[3], INFLUX_CONTAINER_NAME)
-
-
-    mqtt_users = [{'name': 'prisms_subscriber',
-                   'password': generate_password(),
-                   'topic': 'epifi/v1/#'},
-                  {'name': 'prisms_ha_subscriber',
-                   'password': generate_password(),
-                   'topic': 'epifi/ha/v1/#'}]
-
-
-    mosquitto_setup(client, mqtt_users)
-
-    # print(mongodb_users)
-    # print(influxdb_users)
-    # print(grafana_user)
-
-
+    mongodb_setup(client, config)
+    influxdb_setup(client, config)
+    grafana_setup(client, config, INFLUX_CONTAINER_NAME)
+    mosquitto_setup(client, config)
 
     # Fill in passwords for .env file
     env = Environment(loader=FileSystemLoader('templates'))
     template = env.get_template('env.template')
 
-    print(template.render(**config))
-def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
+    print(config)
+
+    # print(template.render(**config))
+
+
+def get_hostname(name, default_value, base_host_name):
+    done = False
+    while not done:
+        subdomain = click.prompt(f"What do you want the subdomain of {name}?",
+                                 default=default_value)
+
+        done = click.confirm(f"Is {subdomain}.{base_host_name} correct?", default=True)
+
+    subdomain = default_value
+
+    return f"{subdomain}.{base_host_name}"
+
+
+def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
                     image='eclipse-mosquitto:latest',
                     root_topic='epifi'):
-    print("Setting up Mosquitto")
+    print("\n\nSetting up Mosquitto")
     persistent_storage = os.path.abspath(persistent_storage)
-
     if not handle_existing_container(client, MOSQUITTO_CONTAINER_NAME, persistent_storage):
         return
+
+    config['mqtt_subscriber_topic'] = f'{root_topic}/v1/#'
+    config['mqtt_subscriber'] = create_user('subscriber', topic=config['mqtt_subscriber_topic'])
+    config['mqtt_ha_subscriber_topic'] = f'{root_topic}/ha/v1/#'
+    config['mqtt_ha_subscriber'] = create_user('ha_subscriber', topic=config['mqtt_ha_subscriber_topic'])
+    users = [config['mqtt_subscriber'], config['mqtt_ha_subscriber']]
 
     config_path = os.path.join(persistent_storage, 'config')
     # Make config directory in storage folder
@@ -106,7 +112,6 @@ def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
     # Copy over config file
     shutil.copy('templates/mosquitto.conf', config_path)
     shutil.copy('templates/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
-
 
     # Create acl_file
     with open(os.path.join(config_path, 'acl'), 'w') as f:
@@ -121,6 +126,11 @@ def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
 
         f.write('\n'.join(lines))
 
+    print(f"Pulling {image} (could take awhile)...")
+    output = docker.APIClient().pull(image, stream=True, decode=True)
+    for o in output:
+        print(o['status'])
+    print('')
 
     # Create password file
     password_file = 'passwords'
@@ -144,20 +154,29 @@ def mosquitto_setup(client, users, persistent_storage='./mosquitto-storage',
     container.remove()
 
 
-
-
-
-def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointainer_name,
+def grafana_setup(client, config, influxdb_cointainer_name,
                   persistent_storage='./grafana-storage',
                   database_name='epifi', image='grafana/grafana:latest'):
-    print("Setting up Grafana")
+    print("\n\nSetting up Grafana")
     persistent_storage = os.path.abspath(persistent_storage)
-
     if not handle_existing_container(client, GRAFANA_CONTAINER_NAME, persistent_storage):
         return
 
+    if 'influxdb_grafana' not in config:
+        click.echo("Looks like InfluxDB was set up previously. "
+                   "Please enter the password for the 'grafana' user in InfluxDB.")
+        config['influxdb_grafana'] = {'name': 'grafana',
+                                      'password': click.prompt('Password', hide_input=True),
+                                      'role': 'read'}
+    influxdb_user = config['influxdb_grafana']
+
+    config['grafana_admin'] = create_user('admin')
+
     print(f"Pulling {image} (could take awhile)...")
-    client.images.pull(image)
+    output = docker.APIClient().pull(image, stream=True, decode=True)
+    for o in output:
+        print(o['status'])
+    print('')
 
     with tempfile.NamedTemporaryFile(dir='.') as f:
         # Set up configuration file
@@ -168,8 +187,8 @@ def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointai
                                         'url': f'http://{influxdb_cointainer_name}:8086',
                                         'database': database_name,
                                         'isDefault': True,
-                                        'user': influxdb_reader_user['name'],
-                                        'password': influxdb_reader_user['password'],
+                                        'user': influxdb_user['name'],
+                                        'password': influxdb_user['password'],
                                         'version': 1,
                                         'editable': True}]}
         f.write(yaml.dump(datasources).encode())
@@ -180,7 +199,7 @@ def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointai
             name=GRAFANA_CONTAINER_NAME,
             detach=True,
             ports={'3000/tcp': 3000},
-            environment={'GF_SECURITY_ADMIN_PASSWORD': admin_password},
+            environment={'GF_SECURITY_ADMIN_PASSWORD': config['grafana_admin']['password']},
             volumes={f.name: {'bind': '/etc/grafana/provisioning/datasources/datasource.yaml',
                               'mode': 'ro'},
                      persistent_storage: {'bind': '/var/lib/grafana', 'mode': 'rw'}})
@@ -194,16 +213,32 @@ def grafana_setup(client, admin_password, influxdb_reader_user, influxdb_cointai
         container.remove()
 
 
-def influxdb_setup(client, users, persistent_storage='./influxdb-storage',
+def influxdb_setup(client, config, persistent_storage='./influxdb-storage',
                    database_name='epifi', image='influxdb:1.6'):
-    print("Setting up InfluxDB")
+    print("\n\nSetting up InfluxDB")
     persistent_storage = os.path.abspath(persistent_storage)
-
     if not handle_existing_container(client, INFLUX_CONTAINER_NAME, persistent_storage):
         return
 
+    print(config)
+    config['influxdb_admin'] = create_user('admin', role='admin')
+    config['influxdb_status'] = create_user('status', role='read')
+    config['influxdb_export'] = create_user('export', role='read')
+    config['influxdb_grafana'] = create_user('grafana', role='read')
+    config['influxdb_mqtt_uploader'] = create_user('uploader', role='write')
+    config['influxdb_mqtt_ha_uploader'] = create_user('ha_uploader', role='write')
+    users = [config['influxdb_admin'],
+             config['influxdb_status'],
+             config['influxdb_export'],
+             config['influxdb_grafana'],
+             config['influxdb_mqtt_uploader'],
+             config['influxdb_mqtt_ha_uploader']]
+
     print(f"Pulling {image} (could take awhile)...")
-    client.images.pull(image)
+    output = docker.APIClient().pull(image, stream=True, decode=True)
+    for o in output:
+        print(o['status'])
+    print('')
 
     container = client.containers.run(
         image,
@@ -231,20 +266,25 @@ def influxdb_setup(client, users, persistent_storage='./influxdb-storage',
     container.remove()
 
 
-def mongodb_setup(client, users, persistent_storage='./mongodb-storage',
+def mongodb_setup(client, config, persistent_storage='./mongodb-storage',
                   database_name='epifi', collection_name='deployments',
                   image='mongo:4.0'):
-    print("Setting up MongoDB")
+    print("\n\nSetting up MongoDB")
     persistent_storage = os.path.abspath(persistent_storage)
-
     if not handle_existing_container(client, MONGODB_CONTAINER_NAME, persistent_storage):
         return
 
-    print(f"Pulling {image} (could take awhile)...")
-    client.images.pull(image)
+    config['mongo_mqtt_reader'] = create_user('mqtt_reader', role='read')
+    config['mongo_status_reader'] = create_user('status_reader', role='read')
+    config['mongo_admin'] = create_user('admin', role='admin')
+    admin_user = config['mongo_admin']
+    other_users = [config['mongo_mqtt_reader'], config['mongo_status_reader']]
 
-    admin_user = get_admin_user(users)
-    other_users = [user for user in users if user['role'] != 'admin']
+    print(f"Pulling {image} (could take awhile)...")
+    output = docker.APIClient().pull(image, stream=True, decode=True)
+    for o in output:
+        print(o['status'])
+    print('')
 
     # Set up configuration files
     with tempfile.NamedTemporaryFile(dir='.') as f:
@@ -276,6 +316,12 @@ def mongodb_setup(client, users, persistent_storage='./mongodb-storage',
         container.stop()
         print(f"Removing {MONGODB_CONTAINER_NAME}...")
         container.remove()
+
+
+def create_user(name, **kwargs):
+    return {'name': name,
+            'password': generate_password(),
+            **kwargs}
 
 
 def wait_for_done(container, wait_time=5, print_logs=False):
