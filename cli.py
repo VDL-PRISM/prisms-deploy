@@ -25,43 +25,13 @@ CONFIG_FILE_NAME = 'epifi.yaml'
 def main():
 
     config = {}
-    if os.path.isfile(CONFIG_FILE_NAME):
-        # Load configuration file
-        with open(CONFIG_FILE_NAME) as f:
-            config = yaml.load(f) or {}
+    if not os.path.isfile(CONFIG_FILE_NAME):
+        print(f"Unable to find {CONFIG_FILE_NAME}")
+        return
 
-    click.echo("Welcome to the EpiFi architecture setup!\n")
-    if not config.get('subdomains'):
-        click.echo("This setup script assumes that you own a domain name and that"
-                    " each service will run as a subdomain. If this is not the"
-                    " case, then you should stop.")
-        if not click.confirm("Would you like to continue?", default=True):
-            click.echo("Bye!")
-            return
-
-    click.echo("\n\nGreat! Let's start with a couple of questions.")
-    if config.get('use_lets_encrypt', True):
-        config['use_lets_encrypt'] = click.confirm(
-            "Would you like to use Let's Encrypt to generate certificates?",
-            default=False)
-
-    if config['use_lets_encrypt']:
-        config['lets_encrypt_email'] = config.get('lets_encrypt_email') or click.prompt("What email address do you want to use?")
-    else:
-        click.echo("\n\nThat's fine. You will have to get your own SSL "
-                    "certificates. Once you have done that, put the keys in "
-                    "the 'certs' folder.")
-
-    config['hostname'] = config.get('hostname') or click.prompt("What is the base hostname?")
-    click.echo("\n\n")
-    config['influxdb_hostname'] = config.get('influxdb_hostname') or get_hostname('the database', 'db', config['hostname'])
-    config['mqtt_hostname'] = config.get('mqtt_hostname') or get_hostname('the MQTT broker', 'mqtt', config['hostname'])
-    config['grafana_hostname'] = config.get('grafana_hostname') or get_hostname('Grafana', 'grafana', config['hostname'])
-    config['mongodb_hostname'] = config.get('mongodb_hostname') or get_hostname('the metadata store', 'meta', config['hostname'])
-    config['export_hostname'] = config.get('export_hostname') or get_hostname('the export tool', 'export', config['hostname'])
-    config['status_hostname'] = config.get('status_hostname') or get_hostname('the status dashboard', 'status', config['hostname'])
-
-    config['export_user'] = create_user('epifi')
+    # Load configuration file
+    with open(CONFIG_FILE_NAME) as f:
+        config = yaml.load(f) or {}
 
     client = docker.from_env()
 
@@ -70,26 +40,13 @@ def main():
     grafana_setup(client, config, INFLUX_CONTAINER_NAME)
     mosquitto_setup(client, config)
 
+    config['export_user'] = create_user('epifi')
+
     # Fill in passwords for .env file
     env = Environment(loader=FileSystemLoader('templates'))
     template = env.get_template('env.template')
 
-    print(config)
-
-    # print(template.render(**config))
-
-
-def get_hostname(name, default_value, base_host_name):
-    done = False
-    while not done:
-        subdomain = click.prompt(f"What do you want the subdomain of {name}?",
-                                 default=default_value)
-
-        done = click.confirm(f"Is {subdomain}.{base_host_name} correct?", default=True)
-
-    subdomain = default_value
-
-    return f"{subdomain}.{base_host_name}"
+    print(template.render(**config))
 
 
 def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
