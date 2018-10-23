@@ -45,9 +45,14 @@ def main():
 
     # Fill in passwords for .env file
     env = Environment(loader=FileSystemLoader('templates'))
-    template = env.get_template('env.template')
+    env_template = env.get_template('env.template')
+    compose_template = env.get_template('docker-compose.template')
 
-    print(template.render(**config))
+    with open('.env', 'w') as f:
+        f.write(env_template.render(**config))
+
+    with open('docker-compose.yaml', 'w') as f:
+        f.write(compose_template.render(**config))
 
 
 def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
