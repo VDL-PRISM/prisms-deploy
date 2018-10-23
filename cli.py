@@ -20,25 +20,36 @@ MONGODB_CONTAINER_NAME = 'epifi-mongodb'
 INFLUX_CONTAINER_NAME = 'epifi-influxdb'
 GRAFANA_CONTAINER_NAME = 'epifi-grafana'
 MOSQUITTO_CONTAINER_NAME = 'epifi-mosquitto'
-CONFIG_FILE_NAME = 'epifi.yaml'
 
-def main():
-
-    config = {}
-    if not os.path.isfile(CONFIG_FILE_NAME):
-        print(f"Unable to find {CONFIG_FILE_NAME}")
-        return
-
+@click.command()
+@click.argument('config_file', type=click.File('r'))
+@click.option('--output_folder', default='epifi',
+              help='The folder to output configuration files')
+def main(config_file, output_folder):
     # Load configuration file
-    with open(CONFIG_FILE_NAME) as f:
-        config = yaml.load(f) or {}
+    config = yaml.load(config_file) or {}
+
+    try:
+        os.makedirs(output_folder)
+    except FileExistsError:
+        print(f"{output_folder} folder already exists.")
+        exit()
 
     client = docker.from_env()
 
-    mongodb_setup(client, config)
-    influxdb_setup(client, config)
-    grafana_setup(client, config, INFLUX_CONTAINER_NAME)
-    mosquitto_setup(client, config)
+    mongodb_setup(client,
+                  config,
+                  os.path.join(output_folder, 'mongodb-storage'))
+    influxdb_setup(client,
+                   config,
+                   os.path.join(output_folder, 'influxdb-storage'))
+    grafana_setup(client,
+                  config,
+                  INFLUX_CONTAINER_NAME,
+                  os.path.join(output_folder, 'grafana-storage'))
+    mosquitto_setup(client,
+                    config,
+                    os.path.join(output_folder, 'mosquitto-storage'))
 
     config['export_user'] = create_user('epifi')
     config['status_user'] = create_user('epifi')
@@ -48,14 +59,14 @@ def main():
     env_template = env.get_template('env.template')
     compose_template = env.get_template('docker-compose.template')
 
-    with open('.env', 'w') as f:
+    with open(os.path.join(output_folder, '.env'), 'w') as f:
         f.write(env_template.render(**config))
 
-    with open('docker-compose.yaml', 'w') as f:
+    with open(os.path.join(output_folder, 'docker-compose.yaml'), 'w') as f:
         f.write(compose_template.render(**config))
 
 
-def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
+def mosquitto_setup(client, config, persistent_storage,
                     image='eclipse-mosquitto:latest',
                     root_topic='epifi'):
     print("\n\nSetting up Mosquitto")
@@ -117,8 +128,8 @@ def mosquitto_setup(client, config, persistent_storage='./mosquitto-storage',
 
 
 def grafana_setup(client, config, influxdb_cointainer_name,
-                  persistent_storage='./grafana-storage',
-                  database_name='epifi', image='grafana/grafana:latest'):
+                  persistent_storage, database_name='epifi',
+                  image='grafana/grafana:latest'):
     print("\n\nSetting up Grafana")
     persistent_storage = os.path.abspath(persistent_storage)
     if not handle_existing_container(client, GRAFANA_CONTAINER_NAME, persistent_storage):
@@ -173,7 +184,7 @@ def grafana_setup(client, config, influxdb_cointainer_name,
         container.remove()
 
 
-def influxdb_setup(client, config, persistent_storage='./influxdb-storage',
+def influxdb_setup(client, config, persistent_storage,
                    database_name='epifi', image='influxdb:1.6'):
     print("\n\nSetting up InfluxDB")
     persistent_storage = os.path.abspath(persistent_storage)
@@ -223,7 +234,7 @@ def influxdb_setup(client, config, persistent_storage='./influxdb-storage',
     container.remove()
 
 
-def mongodb_setup(client, config, persistent_storage='./mongodb-storage',
+def mongodb_setup(client, config, persistent_storage,
                   database_name='epifi', collection_name='deployments',
                   image='mongo:4.0'):
     print("\n\nSetting up MongoDB")
