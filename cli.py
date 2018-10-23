@@ -41,6 +41,7 @@ def main():
     mosquitto_setup(client, config)
 
     config['export_user'] = create_user('epifi')
+    config['status_user'] = create_user('epifi')
 
     # Fill in passwords for .env file
     env = Environment(loader=FileSystemLoader('templates'))

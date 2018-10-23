@@ -60,7 +60,6 @@ services:
     image: prisms/sensor-status:dev
     container_name: sensor_status
     environment:
-      DASH_BASIC_AUTH_ENABLE: ${DASH_BASIC_AUTH_ENABLE}
       DASH_BASIC_AUTH_USERNAME: ${DASH_BASIC_AUTH_USERNAME}
       DASH_BASIC_AUTH_PASSWORD: ${DASH_BASIC_AUTH_PASSWORD}
       DASH_INFLUX_HOST: ${INFLUXDB_HOST}
