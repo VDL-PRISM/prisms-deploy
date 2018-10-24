@@ -16,10 +16,10 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 
 
-MONGODB_CONTAINER_NAME = 'epifi-mongodb'
-INFLUX_CONTAINER_NAME = 'epifi-influxdb'
-GRAFANA_CONTAINER_NAME = 'epifi-grafana'
-MOSQUITTO_CONTAINER_NAME = 'epifi-mosquitto'
+MONGODB_CONTAINER_NAME = 'epifi_mongodb'
+INFLUX_CONTAINER_NAME = 'epifi_influxdb'
+GRAFANA_CONTAINER_NAME = 'epifi_grafana'
+MOSQUITTO_CONTAINER_NAME = 'epifi_mosquitto'
 
 @click.command()
 @click.argument('config_file', type=click.File('r'))
