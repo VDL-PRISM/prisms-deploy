@@ -50,6 +50,9 @@ def main(config_file, output_folder):
     mosquitto_setup(client,
                     config,
                     os.path.join(output_folder, 'mosquitto-storage'))
+    nginx_setup(client,
+                    config,
+                    os.path.join(output_folder, 'nginx-config'))
 
     config['export_user'] = create_user('epifi')
     config['status_user'] = create_user('epifi')
@@ -64,6 +67,12 @@ def main(config_file, output_folder):
 
     with open(os.path.join(output_folder, 'docker-compose.yaml'), 'w') as f:
         f.write(compose_template.render(**config))
+
+
+def nginx_setup(client, config, persistent_storage):
+    print("\n\nSetting up Nginx")
+    os.makedirs(persistent_storage)
+    shutil.copy('templates/nginx.tmpl', persistent_storage)
 
 
 def mosquitto_setup(client, config, persistent_storage,
