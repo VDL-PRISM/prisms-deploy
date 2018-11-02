@@ -68,6 +68,9 @@ def main(config_file, output_folder):
     with open(os.path.join(output_folder, 'docker-compose.yaml'), 'w') as f:
         f.write(compose_template.render(**config))
 
+    with open(os.path.join(output_folder, 'epifi.yaml'), 'w') as f:
+        yaml.dump(config, f, default_flow_style=False)
+
 
 def nginx_setup(client, config, persistent_storage):
     print("\n\nSetting up Nginx")
