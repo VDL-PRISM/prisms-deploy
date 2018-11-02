@@ -10,6 +10,9 @@ pyyaml = "*"
 enlighten = "*"
 
 [dev-packages]
+pytest = "*"
+influxdb = "*"
+paho-mqtt = "*"
 
 [requires]
 python_version = "3.7"
