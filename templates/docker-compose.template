@@ -144,7 +144,9 @@ services:
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
       {% endif %}
+    {% if not testing %}
     entrypoint: bash -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem <(echo) /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && docker-entrypoint.sh mongod --sslMode allowSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --bind_ip_all --smallfiles' # --logpath=/dev/null # --quiet
+    {% endif %}
 
   # Data aggregation
   mosquitto:
