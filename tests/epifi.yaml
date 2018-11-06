@@ -1,0 +1,9 @@
+testing: true
+use_lets_encrypt: false
+
+influxdb_hostname: db.test.com
+mqtt_hostname: mqtt.test.com
+grafana_hostname: grafana.test.com
+mongodb_hostname: meta.test.com
+export_hostname: export.test.com
+status_hostname: status.test.com
