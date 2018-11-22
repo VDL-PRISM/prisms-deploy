@@ -4,15 +4,20 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+docker = "*"
 influxdb = "*"
 pyyaml = "*"
 "jinja2" = "*"
 enlighten = "*"
+click = "*"
 
 [dev-packages]
 pytest = "*"
-influxdb = "*"
 paho-mqtt = "*"
+pymongo = "*"
+arrow = "*"
+python-persistent-queue = "*"
+requests = "*"
 
 [requires]
 python_version = "3.7"

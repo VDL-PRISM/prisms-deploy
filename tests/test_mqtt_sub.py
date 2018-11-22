@@ -1,75 +1,103 @@
+from datetime import datetime
 import json
+import os
+import time
 
+import arrow
 import docker
 import paho.mqtt.client as paho
+from persistent_queue import PersistentQueue
+from pymongo import MongoClient
 import pytest
 import yaml
 
-
-with open('epifi/epifi.yaml') as f:
-    config = yaml.load(f)
-
-# Insert stuff into the metadatabase
-    # Insert data into mosquitto
-    # Start docker-compose
-    # Insert data into MongoDB
+STORAGE_LOCATION = 'epifi/epifi_subscriber-storage'
+# STORAGE_LOCATION = '../mqtt_subscriber/data'
 
 
-@pytest.fixture(scope="module")
-def mqtt_client():
-    client = paho.Client()
-    client.username_pw_set(username='test_sensor', password='test')
-    client.connect('localhost')
-    client.loop_start()
-
-    yield client
-
-    client.disconnect()
-    client.loop_stop()
+def check_influx(client, measurement, time):
+    time_str = arrow.get(time)
+    query = f"SELECT * FROM {measurement} WHERE time = '{time_str}'"
+    data = client.query(query)
+    assert len(data) == 1
 
 
-# @pytest.fixture
-# def add_mosquitto_users(scope="module"):
-#     client = docker.from_env()
-
-#     # Add password
-#     mkpassword_command = f"mosquitto_passwd -b {password_file} {user['name']} {user['password']}"
-
-#     container = client.containers.run(
-#             image,
-#             name=MOSQUITTO_CONTAINER_NAME,
-#             detach=True,
-#             volumes={persistent_storage: {'bind': '/mosquitto', 'mode': 'rw'}},
-#             command=f'/bin/ash -c "cd /mosquitto/config && touch {password_file} && {mkpassword_command}"')
+def get_queues_sizes(path):
+    good = PersistentQueue(os.path.join(path, 'data.queue'))
+    bad = PersistentQueue(os.path.join(path, 'bad-data.queue'))
+    return len(good), len(bad)
 
 
+def test_not_json(mqtt_client):
+    good_before, bad_before = get_queues_sizes(STORAGE_LOCATION)
+
+    data = 'this is not json'
+
+    message = mqtt_client.publish("epifi/v1/test_sensor_1", data, qos=1)
+    message.wait_for_publish()
+
+    # Give time for data to get through system
+    time.sleep(.2)
+
+    good_after, bad_after = get_queues_sizes(STORAGE_LOCATION)
+    assert good_before == good_after
+    assert bad_before == bad_after - 1
 
 
-def test_add_sensor_data(mqtt_client, influx_client):
-    measurement_time = 123
-    data = {'sample_time': measurement_time,
-            'temperature': 71,
-            'humidity': 45,
-            'pm_small': 1234,
-            'pm_large': 82}
+def test_missing_sample_time(mqtt_client):
+    good_before, bad_before = get_queues_sizes(STORAGE_LOCATION)
+
+    data = {'temperature': [71, 'F'],
+            'humidity': [45, '%'],
+            'pm_small': [1234, 'pm'],
+            'pm_large': [82, 'pm']}
 
     message = mqtt_client.publish("epifi/v1/test_sensor_1", json.dumps(data), qos=1)
     message.wait_for_publish()
 
+    # Give time for data to get through system
+    time.sleep(.2)
+
+    good_after, bad_after = get_queues_sizes(STORAGE_LOCATION)
+    assert good_before == good_after
+    assert bad_before == bad_after - 1
+
+
+def test_add_sensor_data(mqtt_client, influx_client, mongodb_deployments):
+    measurement_time = int(time.time())
+
+    data = {'sample_time': [measurement_time, 's'],
+            'temperature': [71, 'F'],
+            'humidity': [45, '%'],
+            'pm_small': [1234, 'pm'],
+            'pm_large': [82, 'pm']}
+
+    message = mqtt_client.publish("epifi/v1/test_sensor_1", json.dumps(data), qos=1)
+    message.wait_for_publish()
+
+    # Give time for data to get through system
+    time.sleep(.2)
+
     # Check InfluxDB for data
-    data = influx_client.query(f"SELECT * FROM /.*/ WHERE time = {measurement_time}")
-    assert len(data) > 0
+    for key in data:
+        check_influx(influx_client, key, measurement_time)
 
 
-def test_add_annotations(mqtt_client, influx_client):
-    measurement_time = 123
-    data = {'sample_time': measurement_time}
+
+def test_add_annotations(mqtt_client, influx_client, mongodb_deployments):
+    measurement_time = int(time.time())
+
+    data = {'sample_time': [measurement_time, 's'],
+            'annotation': ['this is a test', 'speaking']}
 
     message = mqtt_client.publish("epifi/v1/test_sensor_2", json.dumps(data), qos=1)
     message.wait_for_publish()
 
+    # Give time for data to get through system
+    time.sleep(.2)
+
     # Check InfluxDB for data
-    data = influx_client.query(f"SELECT * FROM /.*/ WHERE time = {measurement_time}")
-    assert len(data) > 0
+    for key in data:
+        check_influx(influx_client, key, measurement_time)
 
 

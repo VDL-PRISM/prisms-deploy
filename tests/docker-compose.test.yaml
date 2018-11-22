@@ -3,3 +3,17 @@ services:
   influxdb:
     ports:
       - 8086:8086
+
+  grafana:
+    ports:
+      - 3000:3000
+
+  sensor_status:
+    ports:
+      - 5002:8000
+    environment:
+      DASH_SERVER_UPDATE_TIME: 1
+
+  export_tool:
+    ports:
+      - 5001:8000
