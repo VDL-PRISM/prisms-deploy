@@ -4,7 +4,7 @@ services:
   nginx:
     restart: always
     image: nginx
-    container_name: nginx
+    container_name: epifi_nginx
     ports:
       - "80:80"
       - "443:443"
@@ -17,7 +17,7 @@ services:
   nginx-gen:
     restart: always
     image: jwilder/docker-gen
-    container_name: nginx-gen
+    container_name: epifi_nginx-gen
     volumes:
       - "/var/run/docker.sock:/tmp/docker.sock:ro"
       - "./nginx-config/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro"
@@ -25,11 +25,12 @@ services:
       - nginx
     entrypoint: /usr/local/bin/docker-gen -notify-sighup nginx -watch -wait 5s:30s /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
 
+  {% if use_lets_encrypt %}
   # Generate certificates
   letsencrypt-nginx-proxy-companion:
     restart: always
     image: jrcs/letsencrypt-nginx-proxy-companion
-    container_name: letsencrypt-nginx-proxy-companion
+    container_name: epifi_letsencrypt-nginx-proxy-companion
     volumes_from:
       - nginx
     volumes:
@@ -37,30 +38,31 @@ services:
       - "./certs:/etc/nginx/certs:rw"
     environment:
       - NGINX_DOCKER_GEN_CONTAINER=nginx-gen
+  {% endif %}
 
   # Applications
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
+    container_name: epifi_grafana
     volumes:
       - ./grafana-storage:/var/lib/grafana
       - ./grafana-provisioning:/etc/grafana/provisioning
     environment:
       GF_SERVER_ROOT_URL: https://${GF_VIRTUAL_HOST}
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
       VIRTUAL_HOST: ${GF_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 3000
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${GF_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
     depends_on:
       - influxdb
 
   sensor_status:
     image: prisms/sensor-status:dev
-    container_name: sensor_status
+    container_name: epifi_sensor_status
     environment:
-      DASH_BASIC_AUTH_ENABLE: ${DASH_BASIC_AUTH_ENABLE}
       DASH_BASIC_AUTH_USERNAME: ${DASH_BASIC_AUTH_USERNAME}
       DASH_BASIC_AUTH_PASSWORD: ${DASH_BASIC_AUTH_PASSWORD}
       DASH_INFLUX_HOST: ${INFLUXDB_HOST}
@@ -76,15 +78,17 @@ services:
       VIRTUAL_HOST: ${DASH_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8000
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${DASH_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
     depends_on:
       - influxdb
       - mongodb
 
   export_tool:
     image: prisms/export_tool:dev
-    container_name: export_tool
+    container_name: epifi_export_tool
     environment:
       ET_BASIC_AUTH_USERNAME: ${ET_BASIC_AUTH_USERNAME}
       ET_BASIC_AUTH_PASSWORD: ${ET_BASIC_AUTH_PASSWORD}
@@ -93,40 +97,36 @@ services:
       ET_INFLUX_PASSWORD: ${ET_INFLUXDB_PASSWORD}
       ET_INFLUX_SSL: ${INFLUXDB_SSL}
       ET_INFLUX_DATABASE: ${INFLUXDB_DB}
-      ET_SECRET_KEY: ${ET_SECRET_KEY}
       VIRTUAL_HOST: ${ET_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8000
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${ET_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
     depends_on:
       - influxdb
 
   # Data storage
   influxdb:
     image: influxdb:1.6
-    container_name: influxdb
+    container_name: epifi_influxdb
     volumes:
       - ./influxdb-storage:/var/lib/influxdb
       - ./influxdb-provisioning:/docker-entrypoint-initdb.d
     environment:
-      INFLUXDB_DB: ${INFLUXDB_DB}
-      INFLUXDB_HTTP_AUTH_ENABLED: ${INFLUXDB_HTTP_AUTH_ENABLED}
-      INFLUXDB_ADMIN_USER: ${INFLUXDB_ADMIN_USER}
-      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
-      INFLUXDB_READ_USER: ${INFLUXDB_READ_USER}
-      INFLUXDB_READ_USER_PASSWORD: ${INFLUXDB_READ_USER_PASSWORD}
-      INFLUXDB_WRITE_USER: ${INFLUXDB_WRITE_USER}
-      INFLUXDB_WRITE_USER_PASSWORD: ${INFLUXDB_WRITE_USER_PASSWORD}
+      INFLUXDB_HTTP_AUTH_ENABLED: 1
       VIRTUAL_HOST: ${INFLUXDB_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 8086
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${INFLUXDB_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
 
   mongodb:
     image: mongo:4.0
-    container_name: mongodb
+    container_name: epifi_mongodb
     ports:
       - '27017:27017'
     volumes:
@@ -137,39 +137,40 @@ services:
     environment:
       MONGO_DATA_DIR: /data/db
       # MONGO_LOG_DIR: /dev/null
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
       VIRTUAL_HOST: ${MONGO_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 3001  # Fake port -- not really used
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
     entrypoint: bash -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem <(echo) /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && docker-entrypoint.sh mongod --sslMode allowSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --bind_ip_all --smallfiles' # --logpath=/dev/null # --quiet
 
   # Data aggregation
   mosquitto:
     image: eclipse-mosquitto:latest
-    container_name: mosquitto
+    container_name: epifi_mosquitto
     ports:
       - "1883:1883"
       - "8883:8883"
     volumes:
-      - ./mosquitto-config:/mosquitto/config
-      - ./mosquitto-storage:/mosquitto/data
+      - ./mosquitto-storage/config:/mosquitto/config
+      - ./mosquitto-storage/data:/mosquitto/data
       - ./certs/${MQTT_VIRTUAL_HOST}:/mosquitto/certs:ro
     environment:
       VIRTUAL_HOST: ${MQTT_VIRTUAL_HOST}
       VIRTUAL_NETWORK: nginx-proxy
       VIRTUAL_PORT: 3002  # Fake port -- not really used
+      {% if use_lets_encrypt %}
       LETSENCRYPT_HOST: ${MQTT_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      {% endif %}
 
-  ha_subscriber:
+  epifi_ha_subscriber:
     image: prisms/ha_mqtt_subscriber:dev
-    container_name: ha_subscriber
+    container_name: epifi_ha_subscriber
     volumes:
-      - ./ha_subscriber-storage/:/app/data
+      - ./epifi_ha_subscriber-storage/:/app/data
     environment:
       HA_SUB_INFLUX_USERNAME: ${HA_SUB_INFLUXDB_USERNAME}
       HA_SUB_INFLUX_PASSWORD: ${HA_SUB_INFLUXDB_PASSWORD}
@@ -183,25 +184,25 @@ services:
       - influxdb
       - mosquitto
 
-  prisms_subscriber:
+  epifi_subscriber:
     image: prisms/prisms_mqtt_subscriber:dev
-    container_name: prisms_subscriber
+    container_name: epifi_subscriber
     volumes:
-      - ./prisms_subscriber-storage/:/app/data
+      - ./epifi_subscriber-storage/:/app/data
     environment:
-      PRISMS_SUB_INFLUX_USERNAME: ${PRISMS_SUB_INFLUXDB_USERNAME}
-      PRISMS_SUB_INFLUX_PASSWORD: ${PRISMS_SUB_INFLUXDB_PASSWORD}
-      PRISMS_SUB_INFLUX_HOST: ${INFLUXDB_HOST}
-      PRISMS_SUB_INFLUX_DATABASE: ${INFLUXDB_DB}
-      PRISMS_SUB_INFLUX_SSL: ${INFLUXDB_SSL}
-      PRISMS_SUB_MQTT_HOST: ${MQTT_HOST}
-      PRISMS_SUB_MQTT_USER: ${PRISMS_SUB_MQTT_USER}
-      PRISMS_SUB_MQTT_PASSWORD: ${PRISMS_SUB_MQTT_PASSWORD}
-      PRISMS_SUB_MQTT_TOPICS: ${PRISMS_SUB_MQTT_TOPICS}
-      PRISMS_SUB_MONGO_HOST: ${MONGO_HOST}
-      PRISMS_SUB_MONGO_USER: ${PRISMS_SUB_MONGO_USER}
-      PRISMS_SUB_MONGO_PASSWORD: ${PRISMS_SUB_MONGO_PASSWORD}
-      PRISMS_SUB_MONGO_DATABASE: ${MONGO_DATABASE}
+      SUB_INFLUX_USERNAME: ${SUB_INFLUXDB_USERNAME}
+      SUB_INFLUX_PASSWORD: ${SUB_INFLUXDB_PASSWORD}
+      SUB_INFLUX_HOST: ${INFLUXDB_HOST}
+      SUB_INFLUX_DATABASE: ${INFLUXDB_DB}
+      SUB_INFLUX_SSL: ${INFLUXDB_SSL}
+      SUB_MQTT_HOST: ${MQTT_HOST}
+      SUB_MQTT_USER: ${SUB_MQTT_USER}
+      SUB_MQTT_PASSWORD: ${SUB_MQTT_PASSWORD}
+      SUB_MQTT_TOPICS: ${SUB_MQTT_TOPICS}
+      SUB_MONGO_HOST: ${MONGO_HOST}
+      SUB_MONGO_USER: ${SUB_MONGO_USER}
+      SUB_MONGO_PASSWORD: ${SUB_MONGO_PASSWORD}
+      SUB_MONGO_DATABASE: ${MONGO_DATABASE}
     depends_on:
       - influxdb
       - mongodb
