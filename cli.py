@@ -23,11 +23,14 @@ MOSQUITTO_CONTAINER_NAME = 'epifi_mosquitto'
 
 @click.command()
 @click.argument('config_file', type=click.File('r'))
-@click.option('--output_folder', default='epifi',
+@click.option('--output-folder', default='epifi',
               help='The folder to output configuration files')
-def main(config_file, output_folder):
+@click.option('--pull-latest/--no-pull-latest', default=True,
+              help='Pull the latest images')
+def main(config_file, output_folder, pull_latest):
     # Load configuration file
     config = yaml.load(config_file) or {}
+    env = Environment(loader=FileSystemLoader('templates'))
 
     try:
         os.makedirs(output_folder)
@@ -39,26 +42,30 @@ def main(config_file, output_folder):
 
     mongodb_setup(client,
                   config,
-                  os.path.join(output_folder, 'mongodb-storage'))
+                  os.path.join(output_folder, 'mongodb-storage'),
+                  pull_latest=pull_latest)
     influxdb_setup(client,
                    config,
-                   os.path.join(output_folder, 'influxdb-storage'))
+                   os.path.join(output_folder, 'influxdb-storage'),
+                   pull_latest=pull_latest)
     grafana_setup(client,
                   config,
                   INFLUX_CONTAINER_NAME,
-                  os.path.join(output_folder, 'grafana-storage'))
+                  os.path.join(output_folder, 'grafana-storage'),
+                  pull_latest=pull_latest)
     mosquitto_setup(client,
                     config,
-                    os.path.join(output_folder, 'mosquitto-storage'))
+                    env
+                    os.path.join(output_folder, 'mosquitto-storage'),
+                    pull_latest=pull_latest)
     nginx_setup(client,
-                    config,
-                    os.path.join(output_folder, 'nginx-config'))
+                config,
+                os.path.join(output_folder, 'nginx-config'),)
 
     config['export_user'] = create_user('epifi')
     config['status_user'] = create_user('epifi')
 
     # Fill in passwords for .env file
-    env = Environment(loader=FileSystemLoader('templates'))
     env_template = env.get_template('env.template')
     compose_template = env.get_template('docker-compose.template')
 
@@ -78,9 +85,9 @@ def nginx_setup(client, config, persistent_storage):
     shutil.copy('templates/nginx.tmpl', persistent_storage)
 
 
-def mosquitto_setup(client, config, persistent_storage,
+def mosquitto_setup(client, config, env, persistent_storage,
                     image='eclipse-mosquitto:latest',
-                    root_topic='epifi'):
+                    root_topic='epifi', pull_latest=True):
     print("\n\nSetting up Mosquitto")
     persistent_storage = os.path.abspath(persistent_storage)
     if not handle_existing_container(client, MOSQUITTO_CONTAINER_NAME, persistent_storage):
@@ -97,7 +104,9 @@ def mosquitto_setup(client, config, persistent_storage,
     os.makedirs(os.path.join(config_path, 'certs'))
 
     # Copy over config file
-    shutil.copy('templates/mosquitto.conf', config_path)
+    template = env.get_template('mosquitto.conf')
+    with open(config_path, 'w') as f:
+        f.write(template.render(**config))
     shutil.copy('templates/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
 
     # Create acl_file
@@ -113,9 +122,8 @@ def mosquitto_setup(client, config, persistent_storage,
 
         f.write('\n'.join(lines))
 
-    print(f"Pulling {image} (could take awhile)...")
-    output = docker.APIClient().pull(image, stream=True, decode=True)
-    print_status(output)
+    if pull_latest:
+        pull_latest_image(image)
 
     # Create password file
     password_file = 'passwords'
@@ -141,7 +149,7 @@ def mosquitto_setup(client, config, persistent_storage,
 
 def grafana_setup(client, config, influxdb_cointainer_name,
                   persistent_storage, database_name='epifi',
-                  image='grafana/grafana:latest'):
+                  image='grafana/grafana:latest', pull_latest=True):
     print("\n\nSetting up Grafana")
     persistent_storage = os.path.abspath(persistent_storage)
     if not handle_existing_container(client, GRAFANA_CONTAINER_NAME, persistent_storage):
@@ -157,9 +165,8 @@ def grafana_setup(client, config, influxdb_cointainer_name,
 
     config['grafana_admin'] = create_user('admin')
 
-    print(f"Pulling {image} (could take awhile)...")
-    output = docker.APIClient().pull(image, stream=True, decode=True)
-    print_status(output)
+    if pull_latest:
+        pull_latest_image(image)
 
     with tempfile.NamedTemporaryFile(dir='.') as f:
         # Set up configuration file
@@ -197,12 +204,14 @@ def grafana_setup(client, config, influxdb_cointainer_name,
 
 
 def influxdb_setup(client, config, persistent_storage,
-                   database_name='epifi', image='influxdb:1.6'):
+                   database_name='epifi', image='influxdb:1.6',
+                   pull_latest=True):
     print("\n\nSetting up InfluxDB")
     persistent_storage = os.path.abspath(persistent_storage)
     if not handle_existing_container(client, INFLUX_CONTAINER_NAME, persistent_storage):
         return
 
+    config['influxdb_database'] = database_name
     config['influxdb_admin'] = create_user('admin', role='admin')
     config['influxdb_status'] = create_user('status', role='read')
     config['influxdb_export'] = create_user('export', role='read')
@@ -216,9 +225,8 @@ def influxdb_setup(client, config, persistent_storage,
              config['influxdb_mqtt_uploader'],
              config['influxdb_mqtt_ha_uploader']]
 
-    print(f"Pulling {image} (could take awhile)...")
-    output = docker.APIClient().pull(image, stream=True, decode=True)
-    print_status(output)
+    if pull_latest:
+        pull_latest_image(image)
 
     container = client.containers.run(
         image,
@@ -248,25 +256,26 @@ def influxdb_setup(client, config, persistent_storage,
 
 def mongodb_setup(client, config, persistent_storage,
                   database_name='epifi', collection_name='deployments',
-                  image='mongo:4.0'):
+                  image='mongo:4.0', pull_latest=True):
     print("\n\nSetting up MongoDB")
     persistent_storage = os.path.abspath(persistent_storage)
     if not handle_existing_container(client, MONGODB_CONTAINER_NAME, persistent_storage):
         return
 
+    config['mongodb_database'] = database_name
     config['mongo_mqtt_reader'] = create_user('mqtt_reader', role='read')
     config['mongo_status_reader'] = create_user('status_reader', role='read')
     config['mongo_admin'] = create_user('admin', role='admin')
     admin_user = config['mongo_admin']
     other_users = [config['mongo_mqtt_reader'], config['mongo_status_reader']]
 
-    print(f"Pulling {image} (could take awhile)...")
-    output = docker.APIClient().pull(image, stream=True, decode=True)
-    print_status(output)
+    if pull_latest:
+        pull_latest_image(image)
 
     # Set up configuration files
     with tempfile.NamedTemporaryFile(dir='.') as f:
-        f.write(f"db.createCollection('{collection_name}')\n".encode())
+        f.write(f"db.createCollection('{collection_name}');\n".encode())
+
         for user in other_users:
             name = user['name']
             password = user['password']
@@ -296,6 +305,12 @@ def mongodb_setup(client, config, persistent_storage,
         container.remove()
 
 
+def pull_latest_image(image):
+    print(f"Pulling {image} (could take awhile)...")
+    output = docker.APIClient().pull(image, stream=True, decode=True)
+    print_status(output)
+
+
 def create_user(name, **kwargs):
     return {'name': name,
             'password': generate_password(),
@@ -308,8 +323,7 @@ def print_status(logs):
     pbars = {}
     for line in logs:
         if line['status'] == 'Pulling fs layer' and line['id'] not in pbars:
-            pbar = manager.counter(
-                                   desc=f"Waiting {line['id']}",
+            pbar = manager.counter(desc=f"Waiting {line['id']}",
                                    unit='B')
             pbars[line['id']] = pbar
 

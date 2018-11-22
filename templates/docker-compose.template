@@ -144,7 +144,9 @@ services:
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
       {% endif %}
-    {% if not testing %}
+    {% if testing %}
+    command: --smallfiles --auth
+    {% else %}
     entrypoint: bash -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem <(echo) /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && docker-entrypoint.sh mongod --sslMode allowSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --bind_ip_all --smallfiles' # --logpath=/dev/null # --quiet
     {% endif %}
 
@@ -178,6 +180,7 @@ services:
       HA_SUB_INFLUX_PASSWORD: ${HA_SUB_INFLUXDB_PASSWORD}
       HA_SUB_INFLUX_HOST: ${INFLUXDB_HOST}
       HA_SUB_INFLUX_DATABASE: ${INFLUXDB_DB}
+      HA_SUB_INFLUX_SSL: ${INFLUXDB_SSL}
       HA_SUB_MQTT_HOST: ${MQTT_HOST}
       HA_SUB_MQTT_USER: ${HA_SUB_MQTT_USER}
       HA_SUB_MQTT_PASSWORD: ${HA_SUB_MQTT_PASSWORD}
