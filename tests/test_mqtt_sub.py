@@ -37,7 +37,7 @@ def get_queues_sizes(container, data_path='/app/data'):
                               volumes={directory: {'bind': '/temp'}})
 
         print(subprocess.check_output(['ls', '-alh', directory]))
-        subprocess.call(['sudo', 'chown', '-R', 'travis:travis', 'data'])
+        subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
         print(subprocess.check_output(['ls', '-alh', directory]))
 
         good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
