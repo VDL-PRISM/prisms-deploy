@@ -55,7 +55,7 @@ def main(config_file, output_folder, pull_latest):
                   pull_latest=pull_latest)
     mosquitto_setup(client,
                     config,
-                    env
+                    env,
                     os.path.join(output_folder, 'mosquitto-storage'),
                     pull_latest=pull_latest)
     nginx_setup(client,
@@ -105,7 +105,7 @@ def mosquitto_setup(client, config, env, persistent_storage,
 
     # Copy over config file
     template = env.get_template('mosquitto.conf')
-    with open(config_path, 'w') as f:
+    with open(os.path.join(config_path, 'mosquitto.conf'), 'w') as f:
         f.write(template.render(**config))
     shutil.copy('templates/ca.pem', os.path.join(config_path, 'certs', 'ca.pem'))
 
