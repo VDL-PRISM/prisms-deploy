@@ -12,7 +12,10 @@ install:
   - pip install pipenv
   - pipenv install --dev
   - python cli.py tests/epifi.yaml
-  - cd epifi && docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml up -d
+  - cd epifi
+  - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml pull
+  - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml up -d
+  - cd ..
 
 script:
   - pipenv run py.test -v -s tests
