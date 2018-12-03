@@ -32,6 +32,7 @@ def get_queues_sizes(container, data_path='/app/data'):
         # Copy queues
         client.containers.run("ubuntu", f"cp -r {data_path} /temp/",
                               remove=True,
+                              user=os.environ['USER'],
                               volumes_from=[container],
                               volumes={directory: {'bind': '/temp'}})
 
