@@ -1,3 +1,5 @@
+import subprocess
+
 from influxdb import InfluxDBClient
 import paho.mqtt.client as paho
 from pymongo import MongoClient
@@ -49,13 +51,16 @@ def mongo_client():
     deployments.delete_many({})
 
 
-@pytest.fixture
-def docker_compose():
-    # Move certificate files
-    # Start docker compose
-    yield
-    # Stop docker compose
-    # Delete certificate files
+# @pytest.fixture
+# def docker_compose(scope="module"):
+#     cmd = 'docker-compose -f epifi/docker-compose.yaml -f tests/docker-compose.test.yaml up'
+
+#     print("Starting docker compose")
+#     p = subprocess.Popen(cmd, shell=True)
+#     print(p)
+#     yield
+#     # Stop docker compose
+#     # Delete certificate files
 
 
 @pytest.fixture
