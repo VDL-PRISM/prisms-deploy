@@ -32,9 +32,10 @@ def get_queues_sizes(container, data_path='/app/data'):
         # Copy queues
         client.containers.run("ubuntu", f"cp -r {data_path} /temp/",
                               remove=True,
-                              user=os.environ['USER'],
                               volumes_from=[container],
                               volumes={directory: {'bind': '/temp'}})
+
+        print(subprocess.check_output(['ls', '-alh', directory]))
 
         good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
         bad = PersistentQueue(os.path.join(directory, 'data/bad-data.queue'))
