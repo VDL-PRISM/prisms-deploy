@@ -37,9 +37,7 @@ def get_queues_sizes(container, data_path='/app/data'):
                               volumes_from=[container],
                               volumes={directory: {'bind': '/temp'}})
 
-        print(subprocess.check_output(['ls', '-alh', directory]))
         subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
-        print(subprocess.check_output(['ls', '-alh', directory]))
 
         print("Done...")
         print("Reading persistent queues")
