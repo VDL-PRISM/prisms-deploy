@@ -192,7 +192,7 @@ def grafana_setup(client, config, influxdb_cointainer_name,
             environment={'GF_SECURITY_ADMIN_PASSWORD': config['grafana_admin']['password']},
             volumes={f.name: {'bind': '/etc/grafana/provisioning/datasources/datasource.yaml',
                               'mode': 'ro'},
-                     persistent_storage: {'bind': '/var/lib/grafana', 'mode': 'rw'}})
+                     'epifi_grafana-data': {'bind': '/var/lib/grafana', 'mode': 'rw'}})
 
         print(f"Waiting for {GRAFANA_CONTAINER_NAME} to initialize...")
         wait_for_done(container)
@@ -233,7 +233,7 @@ def influxdb_setup(client, config, persistent_storage,
         name=INFLUX_CONTAINER_NAME,
         detach=True,
         ports={'8086/tcp': 8086},
-        volumes={persistent_storage: {'bind': '/var/lib/influxdb', 'mode': 'rw'}})
+        volumes={'epifi_influxdb-data': {'bind': '/var/lib/influxdb', 'mode': 'rw'}})
 
     print(f"Waiting for {INFLUX_CONTAINER_NAME} to initialize...")
     wait_for_done(container)
@@ -295,7 +295,7 @@ def mongodb_setup(client, config, persistent_storage,
                          'MONGO_INITDB_DATABASE': database_name},
             volumes={f.name: {'bind': '/docker-entrypoint-initdb.d/1-setup.js',
                               'mode': 'ro'},
-                     persistent_storage: {'bind': '/data/db', 'mode': 'rw'}})
+                     'epifi_mongodb-data': {'bind': '/data/db', 'mode': 'rw'}})
 
         print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
         wait_for_done(container)
