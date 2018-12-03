@@ -26,7 +26,7 @@ def get_queues_sizes(container, data_path='/app/data'):
     client = docker.from_env()
 
     # Create temporary directory
-    with tempfile.TemporaryDirectory() as directory:
+    with tempfile.TemporaryDirectory(dir='/tests') as directory:
         directory = os.path.abspath(directory)
 
         # Copy queues

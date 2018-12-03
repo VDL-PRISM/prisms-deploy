@@ -2,8 +2,6 @@ language: python
 
 dist: xenial
 
-sudo: required
-
 python:
   # - "3.4"
   # - "3.5"
@@ -19,6 +17,7 @@ install:
   - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml pull
   - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml up -d
   - cd ..
+  - mkdir /tests/
   - sleep 5
 
 script:
