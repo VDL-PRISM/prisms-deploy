@@ -188,7 +188,7 @@ services:
       - mosquitto
 
   epifi_subscriber:
-    image: prisms/prisms_mqtt_subscriber:dev
+    image: prisms/prisms_mqtt_subscriber:meta
     container_name: epifi_subscriber
     volumes:
       - epifi-subscriber-data:/app/data

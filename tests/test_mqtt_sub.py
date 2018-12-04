@@ -17,10 +17,20 @@ CONTAINER = 'epifi_subscriber'
 
 
 def check_influx(client, measurement, time):
-    time_str = arrow.get(time)
+    time_str = arrow.get(time / 1e6)
     query = f"SELECT * FROM {measurement} WHERE time = '{time_str}'"
     data = client.query(query)
     assert len(data) == 1
+
+    data = list(data.get_points(measurement))[0]
+
+    assert 'deployment_active' in data
+    assert 'deployment_id' in data
+    assert 'deployment_name' in data
+    assert 'sensor_id' in data
+    assert 'sensor_important_measurement' in data
+    assert 'sensor_name' in data
+    assert 'value' in data or 'state' in data
 
 
 def get_queues_sizes(container, data_path='/app/data'):
@@ -62,10 +72,17 @@ def test_not_json(mqtt_client):
 def test_missing_sample_time(mqtt_client):
     good_before, bad_before = get_queues_sizes(CONTAINER)
 
-    data = {'temperature': [71, 'F'],
-            'humidity': [45, '%'],
-            'pm_small': [1234, 'pm'],
-            'pm_large': [82, 'pm']}
+    data = {
+        "data": {
+            "temperature": 71,
+            "humidity": 45,
+            "pm_small": 1234,
+            "pm_large": 82
+        },
+        "metadata": {
+            "firmware": "v1.0"
+        }
+    }
 
     message = mqtt_client.publish("epifi/v1/test_sensor_1", json.dumps(data), qos=1)
     message.wait_for_publish()
@@ -79,13 +96,20 @@ def test_missing_sample_time(mqtt_client):
 
 
 def test_add_sensor_data(mqtt_client, influx_client, mongodb_deployments):
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
 
-    data = {'sample_time': [measurement_time, 's'],
-            'temperature': [71, 'F'],
-            'humidity': [45, '%'],
-            'pm_small': [1234, 'pm'],
-            'pm_large': [82, 'pm']}
+    data = {
+        "time": measurement_time,
+        "data": {
+            "temperature": 71,
+            "humidity": 45,
+            "pm_small": 1234,
+            "pm_large": 82
+        },
+        "metadata": {
+            "firmware": "v1.0"
+        }
+    }
 
     message = mqtt_client.publish("epifi/v1/test_sensor_1", json.dumps(data), qos=1)
     message.wait_for_publish()
@@ -94,16 +118,43 @@ def test_add_sensor_data(mqtt_client, influx_client, mongodb_deployments):
     time.sleep(.2)
 
     # Check InfluxDB for data
-    for key in data:
+    for key in data['data']:
         check_influx(influx_client, key, measurement_time)
 
 
+def test_add_sensor_data_no_metadata(mqtt_client, influx_client, mongodb_deployments):
+    measurement_time = int(time.time() * 1e6)
+
+    data = {
+        "time": measurement_time,
+        "data": {
+            "temperature": 71,
+            "humidity": 45,
+            "pm_small": 1234,
+            "pm_large": 82
+        }
+    }
+
+    message = mqtt_client.publish("epifi/v1/test_sensor_1", json.dumps(data), qos=1)
+    message.wait_for_publish()
+
+    # Give time for data to get through system
+    time.sleep(.2)
+
+    # Check InfluxDB for data
+    for key in data['data']:
+        check_influx(influx_client, key, measurement_time)
+
 
 def test_add_annotations(mqtt_client, influx_client, mongodb_deployments):
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
 
-    data = {'sample_time': [measurement_time, 's'],
-            'annotation': ['this is a test', 'speaking']}
+    data = {
+        "time": measurement_time,
+        "data": {
+            "annotation": 'this is a test',
+        }
+    }
 
     message = mqtt_client.publish("epifi/v1/test_sensor_2", json.dumps(data), qos=1)
     message.wait_for_publish()
@@ -112,7 +163,7 @@ def test_add_annotations(mqtt_client, influx_client, mongodb_deployments):
     time.sleep(.2)
 
     # Check InfluxDB for data
-    for key in data:
+    for key in data['data']:
         check_influx(influx_client, key, measurement_time)
 
 
