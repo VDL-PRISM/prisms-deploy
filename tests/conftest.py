@@ -83,7 +83,7 @@ def mqtt_client():
 
 
 @pytest.fixture
-def mongodb_deployments(scope="module"):
+def mongodb_deployments():
     with open('epifi/epifi.yaml') as f:
         config = yaml.load(f)
 
