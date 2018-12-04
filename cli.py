@@ -273,36 +273,41 @@ def mongodb_setup(client, config, persistent_storage,
         pull_latest_image(image)
 
     # Set up configuration files
-    with tempfile.NamedTemporaryFile(dir='.') as f:
-        f.write(f"db.createCollection('{collection_name}');\n".encode())
+    temp_setup_file = os.path.abspath('./1-setup.js')
+    with open(temp_setup_file, 'w') as f:
+        f.write(f"db.createCollection('{collection_name}');\n")
 
         for user in other_users:
             name = user['name']
             password = user['password']
             role = user['role']
-            f.write(f"db.createUser({{user:'{name}', pwd:'{password}', roles:[{{role:'{role}', db:'{database_name}'}}]}});\n".encode())
+            f.write(f"db.createUser({{user:'{name}', pwd:'{password}', roles:[{{role:'{role}', db:'{database_name}'}}]}});\n")
         f.flush()
 
-        print(f"Starting {MONGODB_CONTAINER_NAME}...")
-        container = client.containers.run(
-            image,
-            name=MONGODB_CONTAINER_NAME,
-            command='--smallfiles',
-            detach=True,
-            environment={'MONGO_DATA_DIR': '/data/db',
-                         'MONGO_INITDB_ROOT_USERNAME': admin_user['name'],
-                         'MONGO_INITDB_ROOT_PASSWORD': admin_user['password'],
-                         'MONGO_INITDB_DATABASE': database_name},
-            volumes={f.name: {'bind': '/docker-entrypoint-initdb.d/1-setup.js',
-                              'mode': 'ro'},
-                     'epifi_mongodb-data': {'bind': '/data/db', 'mode': 'rw'}})
+    print(f"Starting {MONGODB_CONTAINER_NAME}...")
+    container = client.containers.run(
+        image,
+        name=MONGODB_CONTAINER_NAME,
+        command='--smallfiles',
+        detach=True,
+        environment={'MONGO_DATA_DIR': '/data/db',
+                     'MONGO_INITDB_ROOT_USERNAME': admin_user['name'],
+                     'MONGO_INITDB_ROOT_PASSWORD': admin_user['password'],
+                     'MONGO_INITDB_DATABASE': database_name},
+        volumes={temp_setup_file: {'bind': '/docker-entrypoint-initdb.d/1-setup.js',
+                          'mode': 'ro'},
+                 'epifi_mongodb-data': {'bind': '/data/db', 'mode': 'rw'}})
 
-        print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
-        wait_for_done(container)
-        print(f"Stopping {MONGODB_CONTAINER_NAME}...")
-        container.stop()
-        print(f"Removing {MONGODB_CONTAINER_NAME}...")
-        container.remove()
+    print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
+    wait_for_done(container, print_logs=True)
+
+    print(f"Stopping {MONGODB_CONTAINER_NAME}...")
+    container.stop()
+    print(f"Removing {MONGODB_CONTAINER_NAME}...")
+    container.remove()
+
+    # Delete file I created
+    os.remove(temp_setup_file)
 
 
 def pull_latest_image(image):
