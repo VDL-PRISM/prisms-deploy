@@ -21,15 +21,12 @@ def check_influx(client, measurement, time):
     assert len(data) == 1
 
 
-
 def get_queues_sizes(container, data_path='/app/data'):
     client = docker.from_env()
 
     # Create temporary directory
     with tempfile.TemporaryDirectory(dir='.') as directory:
         directory = os.path.abspath(directory)
-
-        print("Running temporary container to copy files...")
 
         # Copy queues
         client.containers.run("ubuntu", f"cp -r {data_path} /temp/",
@@ -39,8 +36,6 @@ def get_queues_sizes(container, data_path='/app/data'):
 
         subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
 
-        print("Done...")
-        print("Reading persistent queues")
         good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
         bad = PersistentQueue(os.path.join(directory, 'data/bad-data.queue'))
         return len(good), len(bad)

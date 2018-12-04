@@ -299,7 +299,7 @@ def mongodb_setup(client, config, persistent_storage,
                  'epifi_mongodb-data': {'bind': '/data/db', 'mode': 'rw'}})
 
     print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
-    wait_for_done(container, print_logs=True)
+    wait_for_done(container)
 
     print(f"Stopping {MONGODB_CONTAINER_NAME}...")
     container.stop()
