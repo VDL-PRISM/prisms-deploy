@@ -344,7 +344,11 @@ def print_status(logs):
             pbar = pbars[line['id']]
 
             pbar.desc = f"Downloaded {line['id']}"
-            pbar.update(pbar.total - pbar.count)
+            if pbar.total is None:
+                pbar.total = pbar.count
+                pbar.update(pbar.total)
+            else:
+                pbar.update(pbar.total - pbar.count)
 
         elif line['status'] == 'Extracting' and line['id'] in pbars:
             progress = line['progressDetail']
