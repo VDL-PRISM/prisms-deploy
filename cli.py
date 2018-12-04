@@ -192,7 +192,7 @@ def grafana_setup(client, config, influxdb_cointainer_name,
             environment={'GF_SECURITY_ADMIN_PASSWORD': config['grafana_admin']['password']},
             volumes={f.name: {'bind': '/etc/grafana/provisioning/datasources/datasource.yaml',
                               'mode': 'ro'},
-                     persistent_storage: {'bind': '/var/lib/grafana', 'mode': 'rw'}})
+                     'epifi_grafana-data': {'bind': '/var/lib/grafana', 'mode': 'rw'}})
 
         print(f"Waiting for {GRAFANA_CONTAINER_NAME} to initialize...")
         wait_for_done(container)
@@ -233,7 +233,7 @@ def influxdb_setup(client, config, persistent_storage,
         name=INFLUX_CONTAINER_NAME,
         detach=True,
         ports={'8086/tcp': 8086},
-        volumes={persistent_storage: {'bind': '/var/lib/influxdb', 'mode': 'rw'}})
+        volumes={'epifi_influxdb-data': {'bind': '/var/lib/influxdb', 'mode': 'rw'}})
 
     print(f"Waiting for {INFLUX_CONTAINER_NAME} to initialize...")
     wait_for_done(container)
@@ -273,36 +273,41 @@ def mongodb_setup(client, config, persistent_storage,
         pull_latest_image(image)
 
     # Set up configuration files
-    with tempfile.NamedTemporaryFile(dir='.') as f:
-        f.write(f"db.createCollection('{collection_name}');\n".encode())
+    temp_setup_file = os.path.abspath('./1-setup.js')
+    with open(temp_setup_file, 'w') as f:
+        f.write(f"db.createCollection('{collection_name}');\n")
 
         for user in other_users:
             name = user['name']
             password = user['password']
             role = user['role']
-            f.write(f"db.createUser({{user:'{name}', pwd:'{password}', roles:[{{role:'{role}', db:'{database_name}'}}]}});\n".encode())
+            f.write(f"db.createUser({{user:'{name}', pwd:'{password}', roles:[{{role:'{role}', db:'{database_name}'}}]}});\n")
         f.flush()
 
-        print(f"Starting {MONGODB_CONTAINER_NAME}...")
-        container = client.containers.run(
-            image,
-            name=MONGODB_CONTAINER_NAME,
-            command='--smallfiles',
-            detach=True,
-            environment={'MONGO_DATA_DIR': '/data/db',
-                         'MONGO_INITDB_ROOT_USERNAME': admin_user['name'],
-                         'MONGO_INITDB_ROOT_PASSWORD': admin_user['password'],
-                         'MONGO_INITDB_DATABASE': database_name},
-            volumes={f.name: {'bind': '/docker-entrypoint-initdb.d/1-setup.js',
-                              'mode': 'ro'},
-                     persistent_storage: {'bind': '/data/db', 'mode': 'rw'}})
+    print(f"Starting {MONGODB_CONTAINER_NAME}...")
+    container = client.containers.run(
+        image,
+        name=MONGODB_CONTAINER_NAME,
+        command='--smallfiles',
+        detach=True,
+        environment={'MONGO_DATA_DIR': '/data/db',
+                     'MONGO_INITDB_ROOT_USERNAME': admin_user['name'],
+                     'MONGO_INITDB_ROOT_PASSWORD': admin_user['password'],
+                     'MONGO_INITDB_DATABASE': database_name},
+        volumes={temp_setup_file: {'bind': '/docker-entrypoint-initdb.d/1-setup.js',
+                          'mode': 'ro'},
+                 'epifi_mongodb-data': {'bind': '/data/db', 'mode': 'rw'}})
 
-        print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
-        wait_for_done(container)
-        print(f"Stopping {MONGODB_CONTAINER_NAME}...")
-        container.stop()
-        print(f"Removing {MONGODB_CONTAINER_NAME}...")
-        container.remove()
+    print(f"Waiting for {MONGODB_CONTAINER_NAME} to initialize...")
+    wait_for_done(container)
+
+    print(f"Stopping {MONGODB_CONTAINER_NAME}...")
+    container.stop()
+    print(f"Removing {MONGODB_CONTAINER_NAME}...")
+    container.remove()
+
+    # Delete file I created
+    os.remove(temp_setup_file)
 
 
 def pull_latest_image(image):

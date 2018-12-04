@@ -1,6 +1,8 @@
 from datetime import datetime
 import json
 import os
+import subprocess
+import tempfile
 import time
 
 import arrow
@@ -11,8 +13,7 @@ from pymongo import MongoClient
 import pytest
 import yaml
 
-STORAGE_LOCATION = 'epifi/epifi_subscriber-storage'
-# STORAGE_LOCATION = '../mqtt_subscriber/data'
+CONTAINER = 'epifi_subscriber'
 
 
 def check_influx(client, measurement, time):
@@ -22,14 +23,28 @@ def check_influx(client, measurement, time):
     assert len(data) == 1
 
 
-def get_queues_sizes(path):
-    good = PersistentQueue(os.path.join(path, 'data.queue'))
-    bad = PersistentQueue(os.path.join(path, 'bad-data.queue'))
-    return len(good), len(bad)
+def get_queues_sizes(container, data_path='/app/data'):
+    client = docker.from_env()
+
+    # Create temporary directory
+    with tempfile.TemporaryDirectory(dir='.') as directory:
+        directory = os.path.abspath(directory)
+
+        # Copy queues
+        client.containers.run("ubuntu", f"cp -r {data_path} /temp/",
+                              remove=True,
+                              volumes_from=[container],
+                              volumes={directory: {'bind': '/temp'}})
+
+        subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
+
+        good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
+        bad = PersistentQueue(os.path.join(directory, 'data/bad-data.queue'))
+        return len(good), len(bad)
 
 
 def test_not_json(mqtt_client):
-    good_before, bad_before = get_queues_sizes(STORAGE_LOCATION)
+    good_before, bad_before = get_queues_sizes(CONTAINER)
 
     data = 'this is not json'
 
@@ -39,13 +54,13 @@ def test_not_json(mqtt_client):
     # Give time for data to get through system
     time.sleep(.2)
 
-    good_after, bad_after = get_queues_sizes(STORAGE_LOCATION)
+    good_after, bad_after = get_queues_sizes(CONTAINER)
     assert good_before == good_after
     assert bad_before == bad_after - 1
 
 
 def test_missing_sample_time(mqtt_client):
-    good_before, bad_before = get_queues_sizes(STORAGE_LOCATION)
+    good_before, bad_before = get_queues_sizes(CONTAINER)
 
     data = {'temperature': [71, 'F'],
             'humidity': [45, '%'],
@@ -58,7 +73,7 @@ def test_missing_sample_time(mqtt_client):
     # Give time for data to get through system
     time.sleep(.2)
 
-    good_after, bad_after = get_queues_sizes(STORAGE_LOCATION)
+    good_after, bad_after = get_queues_sizes(CONTAINER)
     assert good_before == good_after
     assert bad_before == bad_after - 1
 
