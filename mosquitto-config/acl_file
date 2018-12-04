@@ -1,8 +1,0 @@
-pattern write prisms/%u/#
-pattern write prisms_ha/%u/#
-
-user prisms_subscriber
-topic read prisms/#
-
-user prisms_ha_subscriber
-topic read prisms_ha/#
