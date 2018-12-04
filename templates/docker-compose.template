@@ -45,8 +45,7 @@ services:
     image: grafana/grafana:latest
     container_name: epifi_grafana
     volumes:
-      - ./grafana-storage:/var/lib/grafana
-      - ./grafana-provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
     environment:
       GF_SERVER_ROOT_URL: https://${GF_VIRTUAL_HOST}
       VIRTUAL_HOST: ${GF_VIRTUAL_HOST}
@@ -112,8 +111,7 @@ services:
     image: influxdb:1.6
     container_name: epifi_influxdb
     volumes:
-      - ./influxdb-storage:/var/lib/influxdb
-      - ./influxdb-provisioning:/docker-entrypoint-initdb.d
+      - influxdb-data:/var/lib/influxdb
     environment:
       INFLUXDB_HTTP_AUTH_ENABLED: 1
       VIRTUAL_HOST: ${INFLUXDB_VIRTUAL_HOST}
@@ -130,7 +128,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - ./mongodb-storage:/data/db
+      - mongodb-data:/data/db
       - ./mongodb-provisioning:/docker-entrypoint-initdb.d
       - ./mongodb-config/certs/ca.pem:/etc/ssl/certs/ca.pem
       - ./certs/${MONGO_VIRTUAL_HOST}:/etc/ssl/${MONGO_VIRTUAL_HOST}
@@ -144,7 +142,11 @@ services:
       LETSENCRYPT_HOST: ${MONGO_VIRTUAL_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
       {% endif %}
+    {% if testing %}
+    command: --smallfiles --auth
+    {% else %}
     entrypoint: bash -c 'cat /etc/ssl/${MONGO_VIRTUAL_HOST}/key.pem <(echo) /etc/ssl/${MONGO_VIRTUAL_HOST}/cert.pem > /etc/ssl/mongodb.pem && docker-entrypoint.sh mongod --sslMode allowSSL --sslPEMKeyFile /etc/ssl/mongodb.pem --bind_ip_all --smallfiles' # --logpath=/dev/null # --quiet
+    {% endif %}
 
   # Data aggregation
   mosquitto:
@@ -170,12 +172,13 @@ services:
     image: prisms/ha_mqtt_subscriber:dev
     container_name: epifi_ha_subscriber
     volumes:
-      - ./epifi_ha_subscriber-storage/:/app/data
+      - epifi-ha-subscriber-data:/app/data
     environment:
       HA_SUB_INFLUX_USERNAME: ${HA_SUB_INFLUXDB_USERNAME}
       HA_SUB_INFLUX_PASSWORD: ${HA_SUB_INFLUXDB_PASSWORD}
       HA_SUB_INFLUX_HOST: ${INFLUXDB_HOST}
       HA_SUB_INFLUX_DATABASE: ${INFLUXDB_DB}
+      HA_SUB_INFLUX_SSL: ${INFLUXDB_SSL}
       HA_SUB_MQTT_HOST: ${MQTT_HOST}
       HA_SUB_MQTT_USER: ${HA_SUB_MQTT_USER}
       HA_SUB_MQTT_PASSWORD: ${HA_SUB_MQTT_PASSWORD}
@@ -188,7 +191,7 @@ services:
     image: prisms/prisms_mqtt_subscriber:dev
     container_name: epifi_subscriber
     volumes:
-      - ./epifi_subscriber-storage/:/app/data
+      - epifi-subscriber-data:/app/data
     environment:
       SUB_INFLUX_USERNAME: ${SUB_INFLUXDB_USERNAME}
       SUB_INFLUX_PASSWORD: ${SUB_INFLUXDB_PASSWORD}
@@ -207,3 +210,10 @@ services:
       - influxdb
       - mongodb
       - mosquitto
+
+volumes:
+  epifi-subscriber-data:
+  epifi-ha-subscriber-data:
+  mongodb-data:
+  influxdb-data:
+  grafana-data:

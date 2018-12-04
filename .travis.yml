@@ -1,0 +1,25 @@
+language: python
+
+dist: xenial
+
+sudo: true
+
+python:
+  # - "3.4"
+  # - "3.5"
+  # - "3.6"
+  - "3.7"
+
+install:
+  - docker pull ubuntu
+  - pip install pipenv
+  - pipenv install --dev
+  - python cli.py tests/epifi.yaml
+  - cd epifi
+  - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml pull
+  - docker-compose -f docker-compose.yaml -f ../tests/docker-compose.test.yaml up -d
+  - cd ..
+  - sleep 5
+
+script:
+  - pipenv run py.test -v -s tests
