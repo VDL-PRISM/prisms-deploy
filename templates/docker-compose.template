@@ -169,7 +169,7 @@ services:
       {% endif %}
 
   epifi_ha_subscriber:
-    image: prisms/ha_mqtt_subscriber:meta
+    image: prisms/ha_mqtt_subscriber:dev
     container_name: epifi_ha_subscriber
     volumes:
       - epifi-ha-subscriber-data:/app/data
@@ -183,7 +183,7 @@ services:
       - mosquitto
 
   epifi_subscriber:
-    image: prisms/prisms_mqtt_subscriber:meta
+    image: prisms/prisms_mqtt_subscriber:dev
     container_name: epifi_subscriber
     volumes:
       - epifi-subscriber-data:/app/data
