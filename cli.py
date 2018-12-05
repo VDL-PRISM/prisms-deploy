@@ -42,16 +42,16 @@ def main(config_file, output_folder, pull_latest):
 
     mongodb_setup(client,
                   config,
-                  os.path.join(output_folder, 'mongodb-storage'),
+                  'epifi_mongodb-data',
                   pull_latest=pull_latest)
     influxdb_setup(client,
                    config,
-                   os.path.join(output_folder, 'influxdb-storage'),
+                   'epifi_influxdb-data',
                    pull_latest=pull_latest)
     grafana_setup(client,
                   config,
                   INFLUX_CONTAINER_NAME,
-                  os.path.join(output_folder, 'grafana-storage'),
+                  'epifi_grafana-data',
                   pull_latest=pull_latest)
     mosquitto_setup(client,
                     config,
@@ -164,11 +164,10 @@ def mosquitto_setup(client, config, env, persistent_storage,
 
 
 def grafana_setup(client, config, influxdb_cointainer_name,
-                  persistent_storage, database_name='epifi',
+                  volume_name, database_name='epifi',
                   image='grafana/grafana:latest', pull_latest=True):
     print("\n\nSetting up Grafana")
-    persistent_storage = os.path.abspath(persistent_storage)
-    if not handle_existing_container(client, GRAFANA_CONTAINER_NAME, persistent_storage):
+    if not handle_existing_container(client, GRAFANA_CONTAINER_NAME, volume_name):
         return
 
     if 'influxdb_grafana' not in config:
@@ -219,12 +218,11 @@ def grafana_setup(client, config, influxdb_cointainer_name,
         container.remove()
 
 
-def influxdb_setup(client, config, persistent_storage,
+def influxdb_setup(client, config, volume_name,
                    database_name='epifi', image='influxdb:1.6',
                    pull_latest=True):
     print("\n\nSetting up InfluxDB")
-    persistent_storage = os.path.abspath(persistent_storage)
-    if not handle_existing_container(client, INFLUX_CONTAINER_NAME, persistent_storage):
+    if not handle_existing_container(client, INFLUX_CONTAINER_NAME, volume_name):
         return
 
     config['influxdb_database'] = database_name
@@ -270,12 +268,11 @@ def influxdb_setup(client, config, persistent_storage,
     container.remove()
 
 
-def mongodb_setup(client, config, persistent_storage,
+def mongodb_setup(client, config, volume_name,
                   database_name='epifi', collection_name='deployments',
                   image='mongo:4.0', pull_latest=True):
     print("\n\nSetting up MongoDB")
-    persistent_storage = os.path.abspath(persistent_storage)
-    if not handle_existing_container(client, MONGODB_CONTAINER_NAME, persistent_storage):
+    if not handle_existing_container(client, MONGODB_CONTAINER_NAME, volume_name):
         return
 
     config['mongodb_database'] = database_name
@@ -327,7 +324,7 @@ def mongodb_setup(client, config, persistent_storage,
 
 
 def pull_latest_image(image):
-    print(f"Pulling {image} (could take awhile)...")
+    print(f"Pulling {image}...")
     output = docker.APIClient().pull(image, stream=True, decode=True)
     print_status(output)
 
@@ -408,7 +405,7 @@ def wait_for_done(container, wait_time=5, print_logs=False):
             break
 
 
-def handle_existing_container(client, container_name, persistent_storage):
+def handle_existing_container(client, container_name, volume_name):
     # Make sure container isn't already running
     existing_containers = client.containers.list(all=True, filters={'name': container_name})
     if len(existing_containers) > 0:
@@ -421,15 +418,16 @@ def handle_existing_container(client, container_name, persistent_storage):
         existing_containers[0].stop()
         existing_containers[0].remove()
 
-    # Check to see if persistent storage already exists
-    if os.path.exists(persistent_storage) and len(os.listdir(persistent_storage)) > 0:
-        if not click.confirm(f"Data for {container_name} already exists in {persistent_storage}. Would you like to delete it?",
-                         default=False):
+    try:
+        volume = client.volumes.get(volume_name)
+        if not click.confirm(f"{volume_name} data volume already exists which is used by {container_name}. Would you like to delete it?",
+                             default=False):
             print(f"Skipping {container_name} setup...")
             return False
 
-        print(f"Deleting {persistent_storage}...")
-        shutil.rmtree(persistent_storage)
+        volume.remove()
+    except docker.errors.NotFound:
+        pass
 
     return True
 
