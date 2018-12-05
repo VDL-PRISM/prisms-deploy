@@ -71,8 +71,12 @@ def epifi_config(scope="module"):
 
 @pytest.fixture(scope="module")
 def mqtt_client():
+    with open('epifi/epifi.yaml') as f:
+        config = yaml.load(f)
+    mqtt_admin = config['mqtt_admin']
+
     client = paho.Client()
-    client.username_pw_set(username='test_sensor', password='test')
+    client.username_pw_set(username=mqtt_admin['name'], password=mqtt_admin['password'])
     client.connect('localhost')
     client.loop_start()
 

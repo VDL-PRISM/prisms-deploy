@@ -107,7 +107,10 @@ def mosquitto_setup(client, config, env, persistent_storage,
     config['mqtt_http_proxy'] = create_user('http_proxy', topics=[{'name': config['mqtt_subscriber_topic'],
                                                                    'permissions': 'write'}])
 
-    users = [config['mqtt_subscriber'], config['mqtt_ha_subscriber'], config['mqtt_http_proxy']]
+    config['mqtt_admin'] = create_user('admin', topics=[{'name': '#',
+                                                         'permissions': 'readwrite'}])
+
+    users = [config['mqtt_subscriber'], config['mqtt_ha_subscriber'], config['mqtt_http_proxy'], config['mqtt_admin']]
 
     config_path = os.path.join(persistent_storage, 'config')
     # Make config directory in storage folder
