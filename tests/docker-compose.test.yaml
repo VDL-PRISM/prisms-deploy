@@ -17,3 +17,7 @@ services:
   export_tool:
     ports:
       - 5001:8000
+
+  http_proxy:
+    ports:
+      - 5003:8000
