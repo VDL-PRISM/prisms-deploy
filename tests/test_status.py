@@ -68,15 +68,11 @@ def test_update_no_data(epifi_config):
     assert len(data['data']) == 0
 
 
-def test_missing_sensors(epifi_config, mongo_client):
-    deployment_id = 'Deployment 1'
+def test_missing_name(epifi_config, mongo_client):
     now = datetime.utcnow()
     num_measurements = 1
 
-    mongo_client.insert_one({
-        "name": deployment_id,
-        "active": True,
-    })
+    record = mongo_client.insert_one({})
 
     time.sleep(2)
 
@@ -86,28 +82,23 @@ def test_missing_sensors(epifi_config, mongo_client):
     assert r.status_code == 200
 
     data = r.json()
+
     assert 'data' in data
     assert 'now' in data
     assert len(data['data']) != 0
 
-    assert deployment_id in data['data']
-    assert len(data['data'][deployment_id]) == 0
+    assert str(record.inserted_id) in data['data']
+    assert len(data['data'][str(record.inserted_id)]) == 0
 
 
-def test_missing_important_measurement(influx_client, epifi_config, mongo_client):
-    sensor_id = 'test_sensor_1'
-    deployment_id = 'Deployment 1'
+def test_missing_sensors(epifi_config, mongo_client):
+    deployment_name = 'Deployment 1'
     now = datetime.utcnow()
     num_measurements = 1
-    add_data(influx_client, sensor_id, now, num_measurements)
 
     mongo_client.insert_one({
-        "name": deployment_id,
-        "active": True,
-        "sensors": {
-            sensor_id: {
-                "name": "Test Sensor",
-            }
+        "metadata": {
+            "name": deployment_name
         }
     })
 
@@ -123,26 +114,62 @@ def test_missing_important_measurement(influx_client, epifi_config, mongo_client
     assert 'now' in data
     assert len(data['data']) != 0
 
-    assert deployment_id in data['data']
-    assert sensor_id in data['data'][deployment_id]
-    assert data['data'][deployment_id][sensor_id] is None
+    assert deployment_name in data['data']
+    assert len(data['data'][deployment_name]) == 0
 
 
-def test_update(influx_client, epifi_config, mongo_client):
+def test_missing_important_measurement(influx_client, epifi_config, mongo_client):
     sensor_id = 'test_sensor_1'
-    deployment_id = 'Deployment 1'
+    deployment_name = 'Deployment 1'
     now = datetime.utcnow()
     num_measurements = 1
     add_data(influx_client, sensor_id, now, num_measurements)
 
     mongo_client.insert_one({
-        "name": deployment_id,
-        "active": True,
+        "sensors": {
+            sensor_id: {
+                "name": "Test Sensor",
+            }
+        },
+        "metadata": {
+            "active": True,
+            "name": deployment_name,
+        }
+    })
+
+    time.sleep(2)
+
+    user, password = get_user_and_password(epifi_config)
+    r = requests.get(f'http://{HOST}/update', auth=(user, password))
+
+    assert r.status_code == 200
+
+    data = r.json()
+    assert 'data' in data
+    assert 'now' in data
+    assert len(data['data']) != 0
+
+    assert deployment_name in data['data']
+    assert sensor_id in data['data'][deployment_name]
+    assert data['data'][deployment_name][sensor_id] is None
+
+
+def test_missing_active(influx_client, epifi_config, mongo_client):
+    sensor_id = 'test_sensor_1'
+    deployment_name = 'Deployment 1'
+    now = datetime.utcnow()
+    num_measurements = 1
+    add_data(influx_client, sensor_id, now, num_measurements)
+
+    mongo_client.insert_one({
         "sensors": {
             sensor_id: {
                 "name": "Test Sensor",
                 "important_measurement": "pm_small"
             }
+        },
+        "metadata": {
+            "name": deployment_name,
         }
     })
 
@@ -154,10 +181,90 @@ def test_update(influx_client, epifi_config, mongo_client):
     assert r.status_code == 200
 
     data = r.json()
+
     assert 'data' in data
     assert 'now' in data
     assert len(data['data']) != 0
 
-    assert deployment_id in data['data']
-    assert sensor_id in data['data'][deployment_id]
-    assert data['data'][deployment_id][sensor_id] is not None
+    assert deployment_name in data['data']
+    assert sensor_id in data['data'][deployment_name]
+    assert data['data'][deployment_name][sensor_id] is not None
+
+
+def test_active(epifi_config, mongo_client):
+    deployment_name_1 = 'Deployment 1'
+    mongo_client.insert_one({
+        "metadata": {
+            "name": deployment_name_1,
+        }
+    })
+
+    deployment_name_2 = 'Deployment 2'
+    mongo_client.insert_one({
+        "metadata": {
+            "active": True,
+            "name": deployment_name_2,
+        }
+    })
+
+    deployment_name_3 = 'Deployment 3'
+    mongo_client.insert_one({
+        "metadata": {
+            "active": False,
+            "name": deployment_name_3,
+        }
+    })
+
+    time.sleep(2)
+
+    user, password = get_user_and_password(epifi_config)
+    r = requests.get(f'http://{HOST}/update', auth=(user, password))
+
+    assert r.status_code == 200
+
+    data = r.json()
+
+    assert 'data' in data
+    assert 'now' in data
+    assert len(data['data']) != 0
+
+    assert deployment_name_1 in data['data']
+    assert deployment_name_2 in data['data']
+    assert deployment_name_3 not in data['data']
+
+
+def test_update(influx_client, epifi_config, mongo_client):
+    sensor_id = 'test_sensor_1'
+    deployment_name = 'Deployment 1'
+    now = datetime.utcnow()
+    num_measurements = 1
+    add_data(influx_client, sensor_id, now, num_measurements)
+
+    mongo_client.insert_one({
+        "sensors": {
+            sensor_id: {
+                "name": "Test Sensor",
+                "important_measurement": "pm_small"
+            }
+        },
+        "metadata": {
+            "active": True,
+            "name": deployment_name,
+        }
+    })
+
+    time.sleep(200)
+
+    user, password = get_user_and_password(epifi_config)
+    r = requests.get(f'http://{HOST}/update', auth=(user, password))
+
+    assert r.status_code == 200
+
+    data = r.json()
+    assert 'data' in data
+    assert 'now' in data
+    assert len(data['data']) != 0
+
+    assert deployment_name in data['data']
+    assert sensor_id in data['data'][deployment_name]
+    assert data['data'][deployment_name][sensor_id] is not None
