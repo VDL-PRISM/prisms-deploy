@@ -206,7 +206,26 @@ services:
       - mongodb
       - mosquitto
 
+  http_proxy:
+    image: prisms/http_proxy:dev
+    container_name: http_proxy
+    volumes:
+      - http-proxy-data:/app/data
+    environment:
+      HTTP_PROXY_BASIC_AUTH_USERNAME: ${HTTP_PROXY_BASIC_AUTH_USERNAME}
+      HTTP_PROXY_BASIC_AUTH_PASSWORD: ${HTTP_PROXY_BASIC_AUTH_PASSWORD}
+      HTTP_PROXY_MQTT_HOST: ${MQTT_HOST}
+      HTTP_PROXY_MQTT_USER: ${HTTP_PROXY_MQTT_USER}
+      HTTP_PROXY_MQTT_PASSWORD: ${HTTP_PROXY_MQTT_PASSWORD}
+      VIRTUAL_HOST: ${HTTP_PROXY_VIRTUAL_HOST}
+      VIRTUAL_NETWORK: nginx-proxy
+      VIRTUAL_PORT: 8000
+    depends_on:
+      - mosquitto
+      - epifi_subscriber
+
 volumes:
+  http-proxy-data:
   epifi-subscriber-data:
   epifi-ha-subscriber-data:
   mongodb-data:

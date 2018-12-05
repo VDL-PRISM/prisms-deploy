@@ -64,6 +64,7 @@ def main(config_file, output_folder, pull_latest):
 
     config['export_user'] = create_user('epifi')
     config['status_user'] = create_user('epifi')
+    config['http_proxy_user'] = create_user('epifi')
 
     # Fill in passwords for .env file
     env_template = env.get_template('env.template')
@@ -94,10 +95,19 @@ def mosquitto_setup(client, config, env, persistent_storage,
         return
 
     config['mqtt_subscriber_topic'] = f'{root_topic}/v1/#'
-    config['mqtt_subscriber'] = create_user('subscriber', topic=config['mqtt_subscriber_topic'])
+    config['mqtt_subscriber'] = create_user('subscriber', topics=[{'name': config['mqtt_subscriber_topic'],
+                                                                   'permissions': 'read'}])
+
     config['mqtt_ha_subscriber_topic'] = f'{root_topic}/ha/v1/#'
-    config['mqtt_ha_subscriber'] = create_user('ha_subscriber', topic=config['mqtt_ha_subscriber_topic'])
-    users = [config['mqtt_subscriber'], config['mqtt_ha_subscriber']]
+    config['mqtt_ha_subscriber'] = create_user('ha_subscriber', topics=[{'name': config['mqtt_ha_subscriber_topic'],
+                                                                         'permissions': 'read'},
+                                                                        {'name': config['mqtt_subscriber_topic'],
+                                                                         'permissions': 'write'}])
+
+    config['mqtt_http_proxy'] = create_user('http_proxy', topics=[{'name': config['mqtt_subscriber_topic'],
+                                                                   'permissions': 'write'}])
+
+    users = [config['mqtt_subscriber'], config['mqtt_ha_subscriber'], config['mqtt_http_proxy']]
 
     config_path = os.path.join(persistent_storage, 'config')
     # Make config directory in storage folder
@@ -111,14 +121,17 @@ def mosquitto_setup(client, config, env, persistent_storage,
 
     # Create acl_file
     with open(os.path.join(config_path, 'acl'), 'w') as f:
+        # General ACL for all sensors
         lines = [f"pattern write {root_topic}/v1/%u/#",
                  f"pattern write {root_topic}/ha_v1/%u/#",
                  ""]
 
+        # ACL for specific users
         for user in users:
-            lines.extend([f"user {user['name']}",
-                          f"topic read {user['topic']}",
-                          ""])
+            lines.append(f"user {user['name']}")
+            for topic in user['topics']:
+                lines.append(f"topic {topic['permissions']} {topic['name']}")
+            lines.append("")
 
         f.write('\n'.join(lines))
 
