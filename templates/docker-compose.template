@@ -59,7 +59,7 @@ services:
       - influxdb
 
   sensor_status:
-    image: prisms/sensor-status:dev
+    image: prisms/sensor-status:latest
     container_name: epifi_sensor_status
     environment:
       DASH_BASIC_AUTH_USERNAME: ${DASH_BASIC_AUTH_USERNAME}
@@ -86,7 +86,7 @@ services:
       - mongodb
 
   export_tool:
-    image: prisms/export_tool:dev
+    image: prisms/export_tool:latest
     container_name: epifi_export_tool
     environment:
       ET_BASIC_AUTH_USERNAME: ${ET_BASIC_AUTH_USERNAME}
@@ -169,7 +169,7 @@ services:
       {% endif %}
 
   epifi_ha_subscriber:
-    image: prisms/ha_mqtt_subscriber:dev
+    image: prisms/ha_mqtt_subscriber:latest
     container_name: epifi_ha_subscriber
     volumes:
       - epifi-ha-subscriber-data:/app/data
@@ -183,7 +183,7 @@ services:
       - mosquitto
 
   epifi_subscriber:
-    image: prisms/prisms_mqtt_subscriber:dev
+    image: prisms/prisms_mqtt_subscriber:latest
     container_name: epifi_subscriber
     volumes:
       - epifi-subscriber-data:/app/data
@@ -207,7 +207,7 @@ services:
       - mosquitto
 
   http_proxy:
-    image: prisms/http_proxy:dev
+    image: prisms/http_proxy:latest
     container_name: http_proxy
     volumes:
       - http-proxy-data:/app/data
