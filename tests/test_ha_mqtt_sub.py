@@ -14,11 +14,22 @@ import yaml
 
 CONTAINER = 'epifi_ha_subscriber'
 
+
 def check_influx(client, measurement, time):
-    time_str = arrow.get(time)
+    time_str = arrow.get(time / 1e6)
     query = f"SELECT * FROM {measurement} WHERE time = '{time_str}'"
     data = client.query(query)
     assert len(data) == 1
+
+    data = list(data.get_points(measurement))[0]
+
+    assert 'deployment_active' in data
+    assert 'deployment_id' in data
+    assert 'deployment_name' in data
+    assert 'sensor_id' in data
+    assert 'sensor_important_measurement' in data
+    assert 'sensor_name' in data
+    assert 'value' in data or 'state' in data
 
 
 def get_queues_sizes(container, data_path='/app/data'):
@@ -34,7 +45,8 @@ def get_queues_sizes(container, data_path='/app/data'):
                               volumes_from=[container],
                               volumes={directory: {'bind': '/temp'}})
 
-        subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
+        if os.environ.get('CI'):
+            subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
 
         good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
         bad = PersistentQueue(os.path.join(directory, 'data/bad-data.queue'))
@@ -59,13 +71,19 @@ def test_not_json(mqtt_client):
 
 def test_wrong_format(mqtt_client):
     good_before, bad_before = get_queues_sizes(CONTAINER)
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
 
-    data = {'sample_time': [measurement_time, 's'],
-            'temperature': [71, 'F'],
-            'humidity': [45, '%'],
-            'pm_small': [1234, 'pm'],
-            'pm_large': [82, 'pm']}
+    data = {
+        "data": {
+            "temperature": 71,
+            "humidity": 45,
+            "pm_small": 1234,
+            "pm_large": 82
+        },
+        "metadata": {
+            "firmware": "v1.0"
+        }
+    }
 
     message = mqtt_client.publish("epifi/ha/v1/deployment_1", json.dumps(data), qos=1)
     message.wait_for_publish()
@@ -80,7 +98,7 @@ def test_wrong_format(mqtt_client):
 
 def test_missing_sample_time(mqtt_client):
     good_before, bad_before = get_queues_sizes(CONTAINER)
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
 
     data = {'event_data': {'old_state': {},
                            'new_state': {'entity_id': 'sensor.sensor1_temperature',
@@ -98,13 +116,13 @@ def test_missing_sample_time(mqtt_client):
     assert bad_before == bad_after - 1
 
 
-def test_add_sensor_data(mqtt_client, influx_client):
+def test_add_sensor_data(mqtt_client, influx_client, mongodb_deployments):
     good_before, bad_before = get_queues_sizes(CONTAINER)
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
     measurement = 'temperature'
 
     data = {'event_data': {'old_state': {},
-                           'new_state': {'entity_id': f'sensor.sensor1_{measurement}',
+                           'new_state': {'entity_id': f'sensor.test_sensor_1_{measurement}',
                                          'state': 80,
                                          'attributes': {'sample_time': measurement_time}}}}
 
@@ -122,13 +140,13 @@ def test_add_sensor_data(mqtt_client, influx_client):
     check_influx(influx_client, measurement, measurement_time)
 
 
-def test_add_annotation(mqtt_client, influx_client):
+def test_add_annotation(mqtt_client, influx_client, mongodb_deployments):
     good_before, bad_before = get_queues_sizes(CONTAINER)
-    measurement_time = int(time.time())
+    measurement_time = int(time.time() * 1e6)
     measurement = 'annotation'
 
     data = {'event_data': {'old_state': {},
-                           'new_state': {'entity_id': f'sensor.sensor1_{measurement}',
+                           'new_state': {'entity_id': f'sensor.test_sensor_1_{measurement}',
                                          'state': 'test annotation',
                                          'attributes': {'sample_time': measurement_time}}}}
 

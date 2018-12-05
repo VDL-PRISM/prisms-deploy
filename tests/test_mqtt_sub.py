@@ -46,7 +46,8 @@ def get_queues_sizes(container, data_path='/app/data'):
                               volumes_from=[container],
                               volumes={directory: {'bind': '/temp'}})
 
-        subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
+        if os.environ.get('CI'):
+            subprocess.call(['sudo', 'chown', '-R', 'travis:travis', directory])
 
         good = PersistentQueue(os.path.join(directory, 'data/data.queue'))
         bad = PersistentQueue(os.path.join(directory, 'data/bad-data.queue'))
@@ -99,7 +100,7 @@ def test_add_sensor_data(mqtt_client, influx_client, mongodb_deployments):
     measurement_time = int(time.time() * 1e6)
 
     data = {
-        "time": measurement_time,
+        "sample_time": measurement_time,
         "data": {
             "temperature": 71,
             "humidity": 45,
@@ -126,7 +127,7 @@ def test_add_sensor_data_no_metadata(mqtt_client, influx_client, mongodb_deploym
     measurement_time = int(time.time() * 1e6)
 
     data = {
-        "time": measurement_time,
+        "sample_time": measurement_time,
         "data": {
             "temperature": 71,
             "humidity": 45,
@@ -150,7 +151,7 @@ def test_add_annotations(mqtt_client, influx_client, mongodb_deployments):
     measurement_time = int(time.time() * 1e6)
 
     data = {
-        "time": measurement_time,
+        "sample_time": measurement_time,
         "data": {
             "annotation": 'this is a test',
         }
