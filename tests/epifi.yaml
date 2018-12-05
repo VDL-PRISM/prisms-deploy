@@ -7,3 +7,4 @@ grafana_hostname: grafana.test.com
 mongodb_hostname: meta.test.com
 export_hostname: export.test.com
 status_hostname: status.test.com
+http_proxy_hostname: sensor_proxy.test.com
