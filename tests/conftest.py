@@ -99,7 +99,6 @@ def mongodb_deployments():
     deployments = mongo_client[database][collection]
 
     deployment_id = deployments.insert_one({
-        "name": "Deployment 1",
         "active": True,
         "sensors": {
             "test_sensor_1": {
@@ -110,6 +109,10 @@ def mongodb_deployments():
                 "name": "Person 1",
                 "important_measurement": "annotation"
             }
+        },
+        "metadata": {
+            "name": "Deployment 1",
+            "active": True
         }
     })
 

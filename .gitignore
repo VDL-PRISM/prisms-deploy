@@ -2,3 +2,4 @@
 certs/*
 *-storage
 mosquitto-config/password_file
+epifi/

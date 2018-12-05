@@ -169,16 +169,11 @@ services:
       {% endif %}
 
   epifi_ha_subscriber:
-    image: prisms/ha_mqtt_subscriber:dev
+    image: prisms/ha_mqtt_subscriber:meta
     container_name: epifi_ha_subscriber
     volumes:
       - epifi-ha-subscriber-data:/app/data
     environment:
-      HA_SUB_INFLUX_USERNAME: ${HA_SUB_INFLUXDB_USERNAME}
-      HA_SUB_INFLUX_PASSWORD: ${HA_SUB_INFLUXDB_PASSWORD}
-      HA_SUB_INFLUX_HOST: ${INFLUXDB_HOST}
-      HA_SUB_INFLUX_DATABASE: ${INFLUXDB_DB}
-      HA_SUB_INFLUX_SSL: ${INFLUXDB_SSL}
       HA_SUB_MQTT_HOST: ${MQTT_HOST}
       HA_SUB_MQTT_USER: ${HA_SUB_MQTT_USER}
       HA_SUB_MQTT_PASSWORD: ${HA_SUB_MQTT_PASSWORD}
@@ -188,7 +183,7 @@ services:
       - mosquitto
 
   epifi_subscriber:
-    image: prisms/prisms_mqtt_subscriber:dev
+    image: prisms/prisms_mqtt_subscriber:meta
     container_name: epifi_subscriber
     volumes:
       - epifi-subscriber-data:/app/data
